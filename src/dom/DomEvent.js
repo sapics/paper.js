@@ -85,7 +85,7 @@ DomEvent.requestAnimationFrame = new function() {
     function handleCallbacks() {
         // Checks all installed callbacks for element visibility and
         // execute if needed.
-        for (var i = callbacks.length - 1; i >= 0; i--) {
+        for (var i = callbacks.length; i--; ) {
             var entry = callbacks[i],
                 func = entry[0],
                 el = entry[1];
