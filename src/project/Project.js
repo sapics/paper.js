@@ -92,8 +92,9 @@ var Project = PaperScopeItem.extend(/** @lends Project# */{
      * {@link Project#symbols}.
      */
     clear: function() {
-        for (var i = this.layers.length - 1; i >= 0; i--)
-            this.layers[i].remove();
+        var layers = this.layers;
+        for (var i = layers.length; i--; )
+            layers[i].remove();
         this.symbols = [];
     },
 

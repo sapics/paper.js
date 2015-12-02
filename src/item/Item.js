@@ -1597,8 +1597,9 @@ var Item = Base.extend(Emitter, /** @lends Item# */{
 
     _contains: function(point) {
         if (this._children) {
-            for (var i = this._children.length - 1; i >= 0; i--) {
-                if (this._children[i].contains(point))
+            var children = this._children;
+            for (var i = children.length; i--; ) {
+                if (children[i].contains(point))
                     return true;
             }
             return false;
@@ -2429,10 +2430,10 @@ var Item = Base.extend(Emitter, /** @lends Item# */{
      */
     reverseChildren: function() {
         if (this._children) {
-            this._children.reverse();
+            var children = this._children.reverse();
             // Adjust indices
-            for (var i = 0, l = this._children.length; i < l; i++)
-                this._children[i]._index = i;
+            for (var i = 0, l = children.length; i < l; i++)
+                children[i]._index = i;
             this._changed(/*#=*/Change.CHILDREN);
         }
     },

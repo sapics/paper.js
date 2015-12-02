@@ -136,8 +136,9 @@ var CompoundPath = PathItem.extend(/** @lends CompoundPath# */{
     },
 
     smooth: function() {
-        for (var i = 0, l = this._children.length; i < l; i++)
-            this._children[i].smooth();
+        var children = this._children;
+        for (var i = 0, l = children.length; i < l; i++)
+            children[i].smooth();
     },
 
     // DOCS: reduce()
@@ -145,8 +146,7 @@ var CompoundPath = PathItem.extend(/** @lends CompoundPath# */{
     reduce: function reduce() {
         var children = this._children;
         for (var i = children.length - 1; i >= 0; i--) {
-            var path = children[i].reduce();
-            if (path.isEmpty())
+            if (children[i].reduce().isEmpty())
                 children.splice(i, 1);
         }
         if (children.length === 0) { // Replace with a simple empty Path
