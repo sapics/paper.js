@@ -104,7 +104,7 @@ var CompoundPath = PathItem.extend(/** @lends CompoundPath# */{
     insertChildren: function insertChildren(index, items, _preserve) {
         // Convert CompoundPath items in the children list by adding their
         // children to the list and removing their parent.
-        for (var i = items.length - 1; i >= 0; i--) {
+        for (var i = items.length; i--; ) {
             var item = items[i];
             if (item instanceof CompoundPath) {
                 items.splice.apply(items, [i, 1].concat(item.removeChildren()));
@@ -136,17 +136,17 @@ var CompoundPath = PathItem.extend(/** @lends CompoundPath# */{
     },
 
     smooth: function() {
-        for (var i = 0, l = this._children.length; i < l; i++)
-            this._children[i].smooth();
+        var children = this._children;
+        for (var i = 0, l = children.length; i < l; i++)
+            children[i].smooth();
     },
 
     // DOCS: reduce()
     // TEST: reduce()
     reduce: function reduce() {
         var children = this._children;
-        for (var i = children.length - 1; i >= 0; i--) {
-            var path = children[i].reduce();
-            if (path.isEmpty())
+        for (var i = children.length; i--; ) {
+            if (children[i].reduce().isEmpty())
                 children.splice(i, 1);
         }
         if (children.length === 0) { // Replace with a simple empty Path

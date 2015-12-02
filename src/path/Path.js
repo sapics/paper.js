@@ -158,8 +158,9 @@ var Path = PathItem.extend(/** @lends Path# */{
             } else if (this._curves) {
                 // Only notify all curves if we're not told that only segments
                 // have changed and took already care of notifications.
-               for (var i = 0, l = this._curves.length; i < l; i++)
-                    this._curves[i]._changed();
+                var curves = this._curves;
+                for (var i = 0, l = curves.length; i < l; i++)
+                    curves[i]._changed();
             }
         } else if (flags & /*#=*/ChangeFlag.STROKE) {
             // TODO: We could preserve the purely geometric bounds that are not
@@ -367,9 +368,9 @@ var Path = PathItem.extend(/** @lends Path# */{
     },
 
     _transformContent: function(matrix) {
-        var coords = new Array(6);
-        for (var i = 0, l = this._segments.length; i < l; i++)
-            this._segments[i]._transformCoordinates(matrix, coords, true);
+        var coords = new Array(6), segments = this._segments;
+        for (var i = 0, l = segments.length; i < l; i++)
+            segments[i]._transformCoordinates(matrix, coords, true);
         return true;
     },
 
@@ -1262,10 +1263,10 @@ var Path = PathItem.extend(/** @lends Path# */{
      * Reverses the orientation of the path, by reversing all its segments.
      */
     reverse: function() {
-        this._segments.reverse();
+        var segments = this._segments.reverse();
         // Reverse the handles:
-        for (var i = 0, l = this._segments.length; i < l; i++) {
-            var segment = this._segments[i];
+        for (var i = 0, l = segments.length; i < l; i++) {
+            var segment = segments[i];
             var handleIn = segment._handleIn;
             segment._handleIn = segment._handleOut;
             segment._handleOut = handleIn;

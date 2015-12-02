@@ -248,12 +248,12 @@ var PaperScope = Base.extend(/** @lends PaperScope# */{
     clear: function() {
         // Remove all projects, views and tools.
         // This also removes the installed event handlers.
-        for (var i = this.projects.length - 1; i >= 0; i--)
-            this.projects[i].remove();
-        for (var i = this.tools.length - 1; i >= 0; i--)
-            this.tools[i].remove();
-        for (var i = this.palettes.length - 1; i >= 0; i--)
-            this.palettes[i].remove();
+        for (var projects = this.projects, i = projects.length; i--; )
+            projects[i].remove();
+        for (var tools = this.tools, i = tools.length; i--; )
+            tools[i].remove();
+        for (var palettes = this.palettes, i = palettes.length; i--; )
+            palettes[i].remove();
     },
 
     remove: function() {

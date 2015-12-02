@@ -98,22 +98,22 @@ var PathIterator = Base.extend({
     getParameterAt: function(offset) {
         // Make sure we're not beyond the requested offset already. Search the
         // start position backwards from where to then process the loop below.
-        var i, j = this.index;
+        var i, j = this.index, parts = this.parts;
         for (;;) {
             i = j;
-            if (j === 0 || this.parts[--j].offset < offset)
+            if (j === 0 || parts[--j].offset < offset)
                 break;
         }
         // Find the part that succeeds the given offset, then interpolate
         // with the previous part
-        for (var l = this.parts.length; i < l; i++) {
-            var part = this.parts[i];
+        for (var l = parts.length; i < l; i++) {
+            var part = parts[i];
             if (part.offset >= offset) {
                 // Found the right part, remember current position
                 this.index = i;
                 // Now get the previous part so we can linearly interpolate
                 // the curve parameter
-                var prev = this.parts[i - 1];
+                var prev = parts[i - 1];
                 // Make sure we only use the previous parameter value if its
                 // for the same curve, by checking index. Use 0 otherwise.
                 var prevVal = prev && prev.index == part.index ? prev.value : 0,
@@ -127,7 +127,7 @@ var PathIterator = Base.extend({
             }
         }
         // Return last one
-        var part = this.parts[this.parts.length - 1];
+        var part = parts[parts.length - 1];
         return {
             value: 1,
             index: part.index

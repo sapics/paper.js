@@ -1597,8 +1597,9 @@ var Item = Base.extend(Emitter, /** @lends Item# */{
 
     _contains: function(point) {
         if (this._children) {
-            for (var i = this._children.length - 1; i >= 0; i--) {
-                if (this._children[i].contains(point))
+            var children = this._children;
+            for (var i = children.length; i--; ) {
+                if (children[i].contains(point))
                     return true;
             }
             return false;
@@ -1763,7 +1764,7 @@ var Item = Base.extend(Emitter, /** @lends Item# */{
         if (children) {
             var opts = this._getChildHitTestOptions(options);
             // Loop backwards, so items that get drawn last are tested first
-            for (var i = children.length - 1; i >= 0 && !res; i--)
+            for (var i = children.length; i-- && !res; )
                 res = children[i]._hitTest(point, opts);
         }
         if (!res && checkSelf)
@@ -2159,7 +2160,7 @@ var Item = Base.extend(Emitter, /** @lends Item# */{
             // Remove the items from their parents first, since they might be
             // inserted into their own parents, affecting indices.
             // Use the loop also to filter out wrong _type.
-            for (var i = items.length - 1; i >= 0; i--) {
+            for (var i = items.length; i--; ) {
                 var item = items[i];
                 if (_proto && !(item instanceof _proto)) {
                     items.splice(i, 1);
@@ -2412,7 +2413,7 @@ var Item = Base.extend(Emitter, /** @lends Item# */{
         // deletes it for the removed items. Calling #_remove() afterwards is
         // fine, since it only calls Base.splice() if #_index is set.
         var removed = Base.splice(this._children, null, from, to - from);
-        for (var i = removed.length - 1; i >= 0; i--) {
+        for (var i = removed.length; i--; ) {
             // Don't notify parent each time, notify it separately after.
             removed[i]._remove(true, false);
         }
@@ -2429,10 +2430,10 @@ var Item = Base.extend(Emitter, /** @lends Item# */{
      */
     reverseChildren: function() {
         if (this._children) {
-            this._children.reverse();
+            var children = this._children.reverse();
             // Adjust indices
-            for (var i = 0, l = this._children.length; i < l; i++)
-                this._children[i]._index = i;
+            for (var i = 0, l = children.length; i < l; i++)
+                children[i]._index = i;
             this._changed(/*#=*/Change.CHILDREN);
         }
     },

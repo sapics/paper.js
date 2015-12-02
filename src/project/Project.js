@@ -92,8 +92,9 @@ var Project = PaperScopeItem.extend(/** @lends Project# */{
      * {@link Project#symbols}.
      */
     clear: function() {
-        for (var i = this.layers.length - 1; i >= 0; i--)
-            this.layers[i].remove();
+        var layers = this.layers;
+        for (var i = layers.length; i--; )
+            layers[i].remove();
         this.symbols = [];
     },
 
@@ -338,10 +339,11 @@ var Project = PaperScopeItem.extend(/** @lends Project# */{
         // We don't need to do this here, but it speeds up things since we won't
         // repeatedly convert in Item#hitTest() then.
         var point = Point.read(arguments),
-            options = HitResult.getOptions(Base.read(arguments));
+            options = HitResult.getOptions(Base.read(arguments)),
+            layers = this.layers;
         // Loop backwards, so layers that get drawn last are tested first
-        for (var i = this.layers.length - 1; i >= 0; i--) {
-            var res = this.layers[i]._hitTest(point, options);
+        for (var i = layers.length; i--; ) {
+            var res = layers[i]._hitTest(point, options);
             if (res) return res;
         }
         return null;
