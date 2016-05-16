@@ -78,19 +78,11 @@ var SegmentPoint = Point.extend({
         return Numerical.isZero(this._x) && Numerical.isZero(this._y);
     },
 
-    isSelected: function() {
-        return !!(this._owner._selection & this._getSelection());
-    },
-
     setSelected: function(selected) {
-        this._owner.changeSelection(this._getSelection(), selected);
+        this._owner.setSelected(selected, this);
     },
 
-    _getSelection: function() {
-        var owner = this._owner;
-        return this === owner._point ? /*#=*/SegmentSelection.POINT
-            : this === owner._handleIn ? /*#=*/SegmentSelection.HANDLE_IN
-            : this === owner._handleOut ? /*#=*/SegmentSelection.HANDLE_OUT
-            : 0;
+    isSelected: function() {
+        return this._owner.isSelected(this);
     }
 });
