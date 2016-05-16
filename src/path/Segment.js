@@ -115,8 +115,7 @@ var Segment = Base.extend(/** @lends Segment# */{
      */
     initialize: function Segment(arg0, arg1, arg2, arg3, arg4, arg5) {
         var count = arguments.length,
-            point, handleIn, handleOut,
-            selection;
+            point, handleIn, handleOut;
         // TODO: Use Point.read or Point.readNamed to read these?
         if (count === 0) {
             // Nothing
@@ -126,17 +125,17 @@ var Segment = Base.extend(/** @lends Segment# */{
                 point = arg0.point;
                 handleIn = arg0.handleIn;
                 handleOut = arg0.handleOut;
-                selection = arg0.selection;
             } else {
                 point = arg0;
             }
-        } else if (typeof arg0 === 'object') {
-            // It doesn't matter if all of these arguments exist.
-            // new SegmentPoint() produces creates points with (0, 0) otherwise.
+        } else if (count === 2 && typeof arg0 === 'number') {
+            point = arguments;
+        } else if (count <= 3) {
             point = arg0;
+            // Doesn't matter if these arguments exist, SegmentPointcreate
+            // produces creates points with (0, 0) otherwise
             handleIn = arg1;
             handleOut = arg2;
-            selection = arg3;
         } else { // Read points from the arguments list as a row of numbers
             point = arg0 !== undefined ? [ arg0, arg1 ] : null;
             handleIn = arg2 !== undefined ? [ arg2, arg3 ] : null;
@@ -145,8 +144,6 @@ var Segment = Base.extend(/** @lends Segment# */{
         new SegmentPoint(point, this, '_point');
         new SegmentPoint(handleIn, this, '_handleIn');
         new SegmentPoint(handleOut, this, '_handleOut');
-        if (selection)
-            this.setSelection(selection);
     },
 
     _serialize: function(options, dictionary) {
@@ -260,30 +257,8 @@ var Segment = Base.extend(/** @lends Segment# */{
         this._handleOut.set(0, 0);
     },
 
-    getSelection: function() {
-        return this._selection;
-    },
-
-    setSelection: function(selection) {
-        var oldSelection = this._selection,
-            path = this._path;
-        // Set the selection state even if path is not defined yet, to allow
-        // selected segments to be inserted into paths and make JSON
-        // deserialization work.
-        this._selection = selection = selection || 0;
-        // If the selection state of the segment has changed, we need to let
-        // it's path know and possibly add or remove it from
-        // project._selectionItems
-        if (path && selection !== oldSelection) {
-            path._updateSelection(this, oldSelection, selection);
-            // Let path know that we changed something and the view should be
-            // redrawn
-            path._changed(/*#=*/Change.ATTRIBUTE);
-        }
-    },
-
-    _getSelection: function(point) {
-        return !point ? /*#=*/SegmentSelection.ALL
+    _getSelectionFlag: function(point) {
+        return !point ? /*#=*/SegmentSelection.SEGMENT
                 : point === this._point ? /*#=*/SegmentSelection.POINT
                 : point === this._handleIn ? /*#=*/SegmentSelection.HANDLE_IN
                 : point === this._handleOut ? /*#=*/SegmentSelection.HANDLE_OUT
@@ -306,13 +281,33 @@ var Segment = Base.extend(/** @lends Segment# */{
      * path.segments[2].selected = true;
      */
     isSelected: function(_point) {
-        return !!(this._selection & this._getSelection(_point));
+        return !!(this._selection & this._getSelectionFlag(_point));
     },
 
     setSelected: function(selected, _point) {
-        var selection = this._selection,
-            flag = this._getSelection(_point);
-        this.setSelection(selected ? selection | flag : selection & ~flag);
+        var path = this._path,
+            selected = !!selected, // convert to boolean
+            selection = this._selection,
+            oldSelection = selection,
+            flag = this._getSelectionFlag(_point);
+        if (selected) {
+            selection |= flag;
+        } else {
+            selection &= ~flag;
+        }
+        // Set the selection state even if path is not defined yet, to allow
+        // selected segments to be inserted into paths and make JSON
+        // deserialization work.
+        this._selection = selection;
+        // If the selection state of the segment has changed, we need to let
+        // it's path know and possibly add or remove it from
+        // project._selectedItems
+        if (path && selection !== oldSelection) {
+            path._updateSelection(this, oldSelection, selection);
+            // Let path know that we changed something and the view should be
+            // redrawn
+            path._changed(/*#=*/Change.ATTRIBUTE);
+        }
     },
 
     /**

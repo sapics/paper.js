@@ -935,8 +935,8 @@ var Path = PathItem.extend(/** @lends Path# */{
      */
     isFullySelected: function() {
         var length = this._segments.length;
-        return this.isSelected(true) && length > 0 && this._segmentSelection
-                === length * /*#=*/SegmentSelection.ALL;
+        return this._selected && length > 0 && this._segmentSelection
+                === length * /*#=*/SegmentSelection.SEGMENT;
     },
 
     setFullySelected: function(selected) {
@@ -947,20 +947,22 @@ var Path = PathItem.extend(/** @lends Path# */{
         this.setSelected(selected);
     },
 
-    setSelection: function setSelection(selection) {
+    setSelected: function setSelected(selected) {
         // Deselect all segments when path is marked as not selected
-        if (!(selection & /*#=*/ItemSelection.ITEM))
+        if (!selected)
             this._selectSegments(false);
-        setSelection.base.call(this, selection);
+        // No need to pass true for noChildren since Path has none anyway.
+        setSelected.base.call(this, selected);
     },
 
     _selectSegments: function(selected) {
-        var segments = this._segments,
-            length = segments.length,
-            selection = selected ? /*#=*/SegmentSelection.ALL : 0;
-        this._segmentSelection = selection * length;
-        for (var i = 0; i < length; i++)
-            segments[i]._selection = selection;
+        var length = this._segments.length;
+        this._segmentSelection = selected
+                ? length * /*#=*/SegmentSelection.SEGMENT : 0;
+        for (var i = 0; i < length; i++) {
+            this._segments[i]._selection = selected
+                    ? /*#=*/SegmentSelection.SEGMENT : 0;
+        }
     },
 
     _updateSelection: function(segment, oldSelection, newSelection) {

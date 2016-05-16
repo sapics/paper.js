@@ -904,13 +904,18 @@ new function() {
              * @default false
              */
             isSelected: function() {
-                return !!(this._owner._selection & /*#=*/ItemSelection.BOUNDS);
+                return this._owner._boundsSelected;
             },
 
             setSelected: function(selected) {
                 var owner = this._owner;
-                if (owner.changeSelection) {
-                    owner.changeSelection(/*#=*/ItemSelection.BOUNDS, selected);
+                if (owner.setSelected) {
+                    owner._boundsSelected = selected;
+                    // Update the owner's selected state too, so the bounds
+                    // actually get drawn. When deselecting, take a path's
+                    // _segmentSelection into account too, since it will
+                    // have to remain selected even when bounds are deselected
+                    owner.setSelected(selected || owner._segmentSelection > 0);
                 }
             }
         })
