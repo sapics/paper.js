@@ -21,7 +21,6 @@
  */
 var Group = Item.extend(/** @lends Group# */{
     _class: 'Group',
-    _selectBounds: false,
     _selectChildren: true,
     _serializeFields: {
         children: []

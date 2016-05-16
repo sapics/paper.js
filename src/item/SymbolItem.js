@@ -24,6 +24,7 @@ var SymbolItem = Item.extend(/** @lends SymbolItem# */{
     _canApplyMatrix: false,
     // SymbolItem uses strokeBounds for bounds
     _boundsOptions: { stroke: true },
+    _boundsSelected: true,
     _serializeFields: {
         symbol: null
     },

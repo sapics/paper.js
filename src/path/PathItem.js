@@ -21,7 +21,6 @@
  */
 var PathItem = Item.extend(/** @lends PathItem# */{
     _class: 'PathItem',
-    _selectBounds: false,
     _canScaleStroke: true,
 
     initialize: function PathItem() {
