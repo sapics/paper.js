@@ -877,26 +877,54 @@ statics: /** @lends Curve */{
      * @ignore
      */
 }), Base.each({ // Injection scope for tests both as instance and static methods
-    isStraight: function(l, h1, h2) {
+    isStraight: function(point1, point2, h1, h2) {
         if (h1.isZero() && h2.isZero()) {
             // No handles.
             return true;
-        } else if (l.isZero()) {
-            // Zero-length line, with some handles defined.
+        }
+
+        var v = point2.subtract(point1);
+        // Zero-length line, with some handles defined.
+        if (v.isZero()) {
             return false;
-        } else if (h1.isCollinear(l) && h2.isCollinear(l)) {
-            // Collinear handles. Project them onto line to see if they are
-            // within the line's range:
-            var div = l.dot(l),
-                p1 = l.dot(h1) / div,
-                p2 = l.dot(h2) / div;
-            return p1 >= 0 && p1 <= 1 && p2 <= 0 && p2 >= -1;
+        }
+
+        if (h1.isCollinear(v) && h2.isCollinear(v)) {
+            // Collinear handles. Project them onto line to see
+            // if curve are within the range [point1, point2]:
+            if (v.dot(h1) < 0 || v.dot(h2) > 0) {
+                return false;
+            }
+            var p0 = v.dot(point1),
+                p1 = v.dot(h1.add(point1)),
+                p2 = v.dot(h2.add(point2)),
+                p3 = v.dot(point2),
+                a = p3 - 3 * p2 + 3 * p1 - p0,
+                b = p2 - 2 * p1 + p0,
+                c = p1 - p0,
+                discriminant = b * b - a * c;
+            if (discriminant < 0) {
+                return true;
+            }
+            var sqrt = Math.sqrt(discriminant),
+                t1 = - (b + sqrt) / a,
+                t2 = - (b - sqrt) / a;
+            function bezierTest(t) {
+                var m = 1 - t,
+                    p = m*m*m * p0 +
+                        3*m*m*t * p1 +
+                        3*m*t*t * p2 +
+                        t*t*t * p3;
+                return !(p >= p0 && p <= p3 || p <= p0 && p >= p3);
+            }
+            return !(t1 > 0 && t1 < 1 && bezierTest(t1)
+                    || t2 > 0 && t2 < 1 && bezierTest(t2));
         }
         return false;
     },
 
-    isLinear: function(l, h1, h2) {
-        var third = l.divide(3);
+    isLinear: function(point1, point2, h1, h2) {
+        var third = point2.subtract(point1).divide(3);
         return h1.equals(third) && h2.negate().equals(third);
     }
 }, function(test, name) {
@@ -904,17 +932,15 @@ statics: /** @lends Curve */{
     this[name] = function() {
         var seg1 = this._segment1,
             seg2 = this._segment2;
-        return test(seg2._point.subtract(seg1._point),
+        return test(seg1._point, seg2._point,
                 seg1._handleOut, seg2._handleIn);
     };
 
-    // Produce the static version that handles a curve values array.
     this.statics[name] = function(v) {
-        var p1x = v[0], p1y = v[1],
-            p2x = v[6], p2y = v[7];
-        return test(new Point(p2x - p1x, p2y - p1y),
-                new Point(v[2] - p1x, v[3] - p1y),
-                new Point(v[4] - p2x, v[5] - p2y));
+        return test(new Point(v[0], v[1]),
+                    new Point(v[6], v[7]),
+                    new Point(v[2] - v[0], v[3] - v[1]),
+                    new Point(v[4] - v[6], v[5] - v[7]));
     };
 }, /** @lends Curve# */{
     statics: {}, // Filled in the Base.each loop above.
