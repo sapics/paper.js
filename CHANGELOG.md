@@ -35,12 +35,11 @@ contribute to the code.
 
 ### Changed
 - Significant overhaul and improvements of boolean path operations
-  `PathItem#unite()`, `#subtract()`, `#intersect()`, `#exclude()`, `#divide()`
-  (#936):
+  `PathItem#unite()`, `#subtract()`, `#intersect()`, `#exclude()`, `#divide()`:
     - Improve handling of self-intersecting paths and non-zero fill-rules.
     - Handle operations on identical paths.
     - Improve handling of near-collinear lines.
-    - Better handle self-intersecting paths that merely "touch" themselves.
+    - Handle self-intersecting paths that merely "touch" themselves.
     - Handle situations where all encountered intersections are part of overlaps.
 - Methods that accepted a `time` parameter or boolean second parameter causing
   the argument to be interpreted as curve-time instead of offset are now
@@ -61,6 +60,8 @@ contribute to the code.
 - `PathItem#smooth()` now accepts an `options.type` string  specifying which
   smoothing algorithm to use: `'asymmetric'` (default), `'continuous'`,
   `'catmull-rom'`, and `'geometric'` (#338).
+- `PathItem#flatten()`: argument has been changed from `tolerance` (maximum
+  allowed distance between points) to `flatness` (maximum allowed error) (#618).
 - Update internal Acorn JavaScript parser to `0.5.0`, the last small version.
 - Transition to Gulp based build process.
 - Update QUnit to `1.20.0`.
@@ -75,6 +76,8 @@ contribute to the code.
 - `event.preventDefault()` is called by default after any handled mouse mouse
   events, except `'mousemove'`, and only on a `'mousedown'` event if the view
   or tool respond to `'mouseup'`.
+- Switch to the new HTML5 Page Visibility API when detecting invisible documents
+  and canvases.
 - Rename `#windingRule` to `#fillRule` on `Item` and `Style`.
 - Do not replace existing named child reference on `Item#children` with new one
   when the name is identical.
@@ -100,11 +103,11 @@ contribute to the code.
   into the project and `deep` controls whether the item's children are cloned.
   The previous boolean optional argument is still interpreted as the `insert`
   option (#941).
-- `PathItem#flatten()`: argument has been changed from `tolerance` (maximum
-  allowed distance between points) to `flatness` (maximum allowed error) (#618).
 - `Matrix` properties `#b` and `#c` have been reversed to match common standard.
 - `#importSVG()`: improve handling of style inheritance for nested `<defs>`.
 - Move `PaperScript#execute()` URL argument into `options.url` (#902).
+- PaperScript: Only translate `==` to `equals() calls for `Point`, `Size` and
+  `Color` (#1043).
 
 ### Added
 - Use unified code-base for browsers, Node.js, Electron, and anything
@@ -167,10 +170,15 @@ contribute to the code.
 - Allow `Item#position` to be selected via `Item#position.selected` (#980).
 
 ### Fixed
+- Fix calculations of `Item#strokeBounds` for all possible combinations of
+  `Item#strokeScaling` and `Item#applyMatrix` for `Path`, `Shape` and
+  `SymbolItem`, along with correct handling of such strokes in Item#hitTest()
+  (#697, #856, #1014). 
 - Make new code-base unified for Node.js/browser work with module bundlers like
   Webpack (#986).
 - Improve hit-testing and `#contains()` checks on path with horizontal lines
   (#819).
+- Improve reliability of `Path#getInteriorPoint()` in rare edge-cases.
 - Handle non-reversible matrices in `Item#hitTest()` (#617).
 - Fix various issues with adding and removing of segments in paths (#815).
 - Support bubbling up of `doubleclick` events on `Group` (#834).
@@ -182,16 +190,11 @@ contribute to the code.
 - Do not rasterize items if the resulting raster will be empty (#828).
 - Fix SVG serialization in JSDOM `7.0.0` and newer (#821).
 - Correctly handle gradients in SVG import on Firefox (#666).
-- Fix `Shape#strokeBounds` when `#strokeScaling` is false (#856).
-- Correctly handle `#strokeScaling` when calculating `Path` and `Shape` bounds
-  (#697).
 - Consistently interpret curves as straight or not-straight (#838).
 - Switch blendMode to 'lighter' in Candy Crash example for better performance
   (#453).
 - Don't block touch actions when using paper in JavaScript mode (#686).
 - Convert touch event coordinates to project coordinates (#633).
-- Fix problems with group selection structures after `group#importJSON()`
-  (#785).
 - Fix exceptions when a top-level layer is selected.
 - Don't allow layers to turn up in hit-tests (#608).
 - Maintain `Raster#source` correctly on Node.js (#914).
@@ -201,7 +204,6 @@ contribute to the code.
   when it is a child items array of a `CompoundPath`.
 - Correctly handle `#strokeScaling` in `Shape` hit-tests (#697).
 - Support clip-masks in hit-testing (#671).
-- `#importJSON()` no longer generates callstack exceeded exceptions (#764).
 - Fix incorrect `#hitTest()` and `#contains()` cases (#819, #884).
 - Update documentation to note appropriate use for `#simplify()` (#920).
 - `#importSVG()` now supports percentage dimensions and
@@ -220,17 +222,24 @@ contribute to the code.
 - `#importJSON()` and `#exportJSON()` now handle non-`Item` objects correctly
   (#392).
 - `#exportSVG()` now exports empty paths if used as a clip-mask.
+- `#importJSON()` no longer generates callstack exceeded exceptions (#764).
+- Fix problems with group selection structures after `Group#importJSON()`
+  (#785).
+- Fix an issue in `Item#importJSON()` where `#parent` is `null` when calling it
+  on existing, already inserted items (#1041).
 - Correct issue when using paper-core in Node.js (#975).
 - Fix `event.delta` on mousedrag events (#981).
 - Improve handling of XML attribute namespaces for IE's XMLSerializer() (#984).
 - Make sure `Item#removeChildren()` fully removes children (#991).
-- Improve handling of `event#stopPropagation()` on `View` and `Item` (#995).
+- Improve handling of event propagation on `View` and `Item` (#995).
 - `#importSVG()`: Improve handling of viewBox.
 - Make sure all named item lookup structures are kept in sync (#1009).
 - Convert absolute local gradient URLs to relative ones (#1001).
 - Fix TypeError in `Path#unite()` (#1000).
 - Allow the selection of a `Path` item's bounds without selecting the segments
   (#769).
+- Fix wrong indices in `Item#insertChildren()`, when inserting children that
+  were previously inserted in the same parent (#1015).
 
 ### Removed
 - Canvas attributes "resize" and "data-paper-resize" no longer cause paper to
@@ -251,7 +260,7 @@ contribute to the code.
   It is replaced by `Project#addLayer()` and `Project#insertLayer()`.
 
 ### Deprecated
-- `#windingRule` on `Item` and `Style` → `#fillRule`.
+- `#windingRule` on `Item` and `Style` → `#fillRule`
 - `Curve#getNormalAt(time, true)` → `#getNormalAtTime(true)`
 - `Curve#divide()` → `#divideAt(offset)` / `#divideAtTime(time)`
 - `Curve#split()` → `#splitAt(offset)` / `#splitAtTime(time)`
@@ -268,6 +277,7 @@ contribute to the code.
 - `Symbol#definition` → `SymbolDefinition#item`
 - `PlacedSymbol#symbol` → `SymbolItem#definition`
 - `Project#symbols` → `#symbolDefinitions`
-- `Matrix#concatenante` → `#append`.
-- `Matrix#preConcatenate` → `#prepend`.
-- `Matrix#chain` → `#appended`.
+- `Matrix#concatenate` → `#append`
+- `Matrix#preConcatenate` → `#prepend`
+- `Matrix#chain` → `#appended`
+- `GradientStop#rampPoint` → `#offset`

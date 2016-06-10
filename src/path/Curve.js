@@ -881,22 +881,29 @@ statics: /** @lends Curve */{
         if (h1.isZero() && h2.isZero()) {
             // No handles.
             return true;
-        } else if (l.isZero()) {
-            // Zero-length line, with some handles defined.
-            return false;
-        } else if (h1.isCollinear(l) && h2.isCollinear(l)) {
-            // Collinear handles. Project them onto line to see if they are
-            // within the line's range:
-            var div = l.dot(l),
-                p1 = l.dot(h1) / div,
-                p2 = l.dot(h2) / div;
-            return p1 >= 0 && p1 <= 1 && p2 <= 0 && p2 >= -1;
+        } else {
+            var v = l.getVector(),
+                epsilon = /*#=*/Numerical.GEOMETRIC_EPSILON;
+            if (v.isZero()) {
+                // Zero-length line, with some handles defined.
+                return false;
+            } else if (l.getDistance(h1) < epsilon
+                    && l.getDistance(h2) < epsilon) {
+                // Collinear handles: Instead of v.isCollinear(h1) checks, we
+                // need to measure the distance to the line, in order to be able
+                // to use the same epsilon as in Curve#getTimeOf(), see #1066.
+                // Project them onto line to see if they are within its range:
+                var div = v.dot(v),
+                    p1 = v.dot(h1) / div,
+                    p2 = v.dot(h2) / div;
+                return p1 >= 0 && p1 <= 1 && p2 <= 0 && p2 >= -1;
+            }
         }
         return false;
     },
 
     isLinear: function(l, h1, h2) {
-        var third = l.divide(3);
+        var third = l.getVector().divide(3);
         return h1.equals(third) && h2.negate().equals(third);
     }
 }, function(test, name) {
@@ -904,7 +911,7 @@ statics: /** @lends Curve */{
     this[name] = function() {
         var seg1 = this._segment1,
             seg2 = this._segment2;
-        return test(seg2._point.subtract(seg1._point),
+        return test(new Line(seg1._point, seg2._point),
                 seg1._handleOut, seg2._handleIn);
     };
 
@@ -912,7 +919,7 @@ statics: /** @lends Curve */{
     this.statics[name] = function(v) {
         var p1x = v[0], p1y = v[1],
             p2x = v[6], p2y = v[7];
-        return test(new Point(p2x - p1x, p2y - p1y),
+        return test(new Line(p1x, p1y, p2x, p2y),
                 new Point(v[2] - p1x, v[3] - p1y),
                 new Point(v[4] - p2x, v[5] - p2y));
     };
@@ -1542,13 +1549,12 @@ new function() { // Scope for intersection using bezier fat-line clipping
     }
 
     function addCurveIntersections(v1, v2, c1, c2, locations, param, tMin, tMax,
-            uMin, uMax, reverse, recursion) {
-        // Avoid deeper recursion.
-        // NOTE: @iconexperience determined that more than 20 recursions are
-        // needed sometimes, depending on the tDiff threshold values further
-        // below when determining which curve converges the least: #565, #899
-        if (++recursion >= 26)
-            return;
+            uMin, uMax, reverse, calls) {
+        // Avoid deeper recursion, but instead of counting recursion, we count
+        // the total amount of calls, to avoid massive call-trees as suggested
+        // by @iconexperience in #904#issuecomment-225283430. See also #565 #899
+        if (++calls > 4000)
+            return calls;
         // Let P be the first curve and Q be the second
         var q0x = v2[0], q0y = v2[1], q3x = v2[6], q3y = v2[7],
             getSignedDistance = Line.getSignedDistance,
@@ -1605,27 +1611,28 @@ new function() { // Scope for intersection using bezier fat-line clipping
                 if (tMaxNew - tMinNew > uMax - uMin) {
                     var parts = Curve.subdivide(v1, 0.5),
                         t = (tMinNew + tMaxNew) / 2;
-                    addCurveIntersections(
+                    calls = addCurveIntersections(
                             v2, parts[0], c2, c1, locations, param,
-                            uMin, uMax, tMinNew, t, !reverse, recursion);
-                    addCurveIntersections(
+                            uMin, uMax, tMinNew, t, !reverse, calls);
+                    calls = addCurveIntersections(
                             v2, parts[1], c2, c1, locations, param,
-                            uMin, uMax, t, tMaxNew, !reverse, recursion);
+                            uMin, uMax, t, tMaxNew, !reverse, calls);
                 } else {
                     var parts = Curve.subdivide(v2, 0.5),
                         u = (uMin + uMax) / 2;
-                    addCurveIntersections(
+                    calls = addCurveIntersections(
                             parts[0], v1, c2, c1, locations, param,
-                            uMin, u, tMinNew, tMaxNew, !reverse, recursion);
-                    addCurveIntersections(
+                            uMin, u, tMinNew, tMaxNew, !reverse, calls);
+                    calls = addCurveIntersections(
                             parts[1], v1, c2, c1, locations, param,
-                            u, uMax, tMinNew, tMaxNew, !reverse, recursion);
+                            u, uMax, tMinNew, tMaxNew, !reverse, calls);
                 }
             } else { // Iterate
-                addCurveIntersections(v2, v1, c2, c1, locations, param,
-                        uMin, uMax, tMinNew, tMaxNew, !reverse, recursion);
+                calls = addCurveIntersections(v2, v1, c2, c1, locations, param,
+                        uMin, uMax, tMinNew, tMaxNew, !reverse, calls);
             }
         }
+        return calls;
     }
 
     /**
