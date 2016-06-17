@@ -629,10 +629,16 @@ statics: /** @lends Curve */{
             c1 = v[coord + 2],
             c2 = v[coord + 4],
             p2 = v[coord + 6],
-            c = 3 * (c1 - p1),
-            b = 3 * (c2 - c1) - c,
-            a = p2 - p1 - c - b;
-        return Numerical.solveCubic(a, b, c, p1 - val, roots, min, max);
+            res = 0;
+        // If val is outside the curve values, no solution is possible.
+        if (  !(p1 < val && p2 < val && c1 < val && c2 < val ||
+                p1 > val && p2 > val && c1 > val && c2 > val)) {
+            var c = 3 * (c1 - p1),
+                b = 3 * (c2 - c1) - c,
+                a = p2 - p1 - c - b;
+            res = Numerical.solveCubic(a, b, c, p1 - val, roots, min, max);
+        }
+        return res;
     },
 
     getTimeOf: function(v, point) {
@@ -784,7 +790,6 @@ statics: /** @lends Curve */{
      * NOTE: padding is only used for Path.getBounds().
      */
     _addBounds: function(v0, v1, v2, v3, coord, padding, min, max, roots) {
-        padding /= 2; // strokePadding is in width, not radius
         // Code ported and further optimised from:
         // http://blog.hackers-cafe.net/2009/06/how-to-calculate-bezier-curves-bounding.html
         function add(value, padding) {
@@ -795,32 +800,49 @@ statics: /** @lends Curve */{
             if (right > max[coord])
                 max[coord] = right;
         }
-        // Calculate derivative of our bezier polynomial, divided by 3.
-        // Doing so allows for simpler calculations of a, b, c and leads to the
-        // same quadratic roots.
-        var a = 3 * (v1 - v2) - v0 + v3,
-            b = 2 * (v0 + v2) - 4 * v1,
-            c = v1 - v0,
-            count = Numerical.solveQuadratic(a, b, c, roots),
-            // Add some tolerance for good roots, as t = 0, 1 are added
-            // separately anyhow, and we don't want joins to be added with radii
-            // in getStrokeBounds()
-            tMin = /*#=*/Numerical.CURVETIME_EPSILON,
-            tMax = 1 - tMin;
-        // Only add strokeWidth to bounds for points which lie within 0 < t < 1
-        // The corner cases for cap and join are handled in getStrokeBounds()
-        add(v3, 0);
-        for (var i = 0; i < count; i++) {
-            var t = roots[i],
-                u = 1 - t;
-            // Test for good roots and only add to bounds if good.
-            if (tMin < t && t < tMax)
-                // Calculate bezier polynomial at t.
-                add(u * u * u * v0
-                    + 3 * u * u * t * v1
-                    + 3 * u * t * t * v2
-                    + t * t * t * v3,
-                    padding);
+
+        padding /= 2; // strokePadding is in width, not radius
+        var minPad = min[coord] - padding,
+            maxPad = max[coord] + padding;
+        // Perform a rough bounds checking first: The curve can only extend the
+        // current bounds if at least one value is outside the min-max range.
+        if (    v0 < minPad || v1 < minPad || v2 < minPad || v3 < minPad ||
+                v0 > maxPad || v1 > maxPad || v2 > maxPad || v3 > maxPad) {
+            if (v1 < v0 != v1 < v3 && v2 < v0 != v2 < v3) {
+                // If the values of a curve are sorted, the extrema are simply
+                // the start and end point.
+                add(v0, padding);
+                add(v3, padding);
+            } else {
+                // Calculate derivative of our bezier polynomial, divided by 3.
+                // Doing so allows for simpler calculations of a, b, c and leads
+                // to the same quadratic roots.
+                var a = 3 * (v1 - v2) - v0 + v3,
+                    b = 2 * (v0 + v2) - 4 * v1,
+                    c = v1 - v0,
+                    count = Numerical.solveQuadratic(a, b, c, roots),
+                    // Add some tolerance for good roots, as t = 0, 1 are added
+                    // separately anyhow, and we don't want joins to be added
+                    // with radii in getStrokeBounds()
+                    tMin = /*#=*/Numerical.CURVETIME_EPSILON,
+                    tMax = 1 - tMin;
+                // Only add strokeWidth to bounds for points which lie within 0
+                // < t < 1 The corner cases for cap and join are handled in
+                // getStrokeBounds()
+                add(v3, 0);
+                for (var i = 0; i < count; i++) {
+                    var t = roots[i],
+                        u = 1 - t;
+                    // Test for good roots and only add to bounds if good.
+                    if (tMin < t && t < tMax)
+                    // Calculate bezier polynomial at t.
+                        add(u * u * u * v0
+                            + 3 * u * u * t * v1
+                            + 3 * u * t * t * v2
+                            + t * t * t * v3,
+                            padding);
+                }
+            }
         }
     }
 }}, Base.each(
@@ -1051,6 +1073,17 @@ statics: /** @lends Curve */{
     getParameterAt: '#getTimeAt',
 
     /**
+     * Calculates the curve offset at the specified curve-time parameter on
+     * the curve.
+     *
+     * @param {Number} time the curve-time parameter on the curve
+     * @return {Number} the curve offset at the specified the location
+     */
+    getOffsetAtTime: function(t) {
+        return this.getPartLength(0, t);
+    },
+
+    /**
      * Returns the curve location of the specified point if it lies on the
      * curve, `null` otherwise.
      *
@@ -1261,7 +1294,7 @@ new function() { // Injection scope for various curve evaluation methods
             this[name + 'At'] = function(location, _isTime) {
                 var values = this.getValues();
                 return Curve[name](values, _isTime ? location
-                        : Curve.getTimeAt(values, location, 0));
+                        : Curve.getTimeAt(values, location));
             };
 
             this[name + 'AtTime'] = function(time) {
@@ -1549,11 +1582,12 @@ new function() { // Scope for intersection using bezier fat-line clipping
     }
 
     function addCurveIntersections(v1, v2, c1, c2, locations, param, tMin, tMax,
-            uMin, uMax, reverse, calls) {
-        // Avoid deeper recursion, but instead of counting recursion, we count
-        // the total amount of calls, to avoid massive call-trees as suggested
-        // by @iconexperience in #904#issuecomment-225283430. See also #565 #899
-        if (++calls > 4000)
+            uMin, uMax, flip, recursion, calls) {
+        // Avoid deeper recursion, by counting the total amount of recursions,
+        // as well as the total amount of calls, to avoid massive call-trees as
+        // suggested by @iconexperience in #904#issuecomment-225283430.
+        // See also: #565 #899 #1074
+        if (++recursion >= 48 || ++calls > 4096)
             return calls;
         // Let P be the first curve and Q be the second
         var q0x = v2[0], q0y = v2[1], q3x = v2[6], q3y = v2[7],
@@ -1565,9 +1599,9 @@ new function() { // Scope for intersection using bezier fat-line clipping
             factor = d1 * d2 > 0 ? 3 / 4 : 4 / 9,
             dMin = factor * Math.min(0, d1, d2),
             dMax = factor * Math.max(0, d1, d2),
-            // Calculate non-parametric bezier curve D(ti, di(t)) - di(t) is the
-            // distance of P from the baseline l of the fat-line, ti is equally
-            // spaced in [0, 1]
+            // Calculate non-parametric bezier curve D(ti, di(t)):
+            // - di(t) is the distance of P from baseline l of the fat-line
+            // - ti is equally spaced in [0, 1]
             dp0 = getSignedDistance(q0x, q0y, q3x, q3y, v1[0], v1[1]),
             dp1 = getSignedDistance(q0x, q0y, q3x, q3y, v1[2], v1[3]),
             dp2 = getSignedDistance(q0x, q0y, q3x, q3y, v1[4], v1[5]),
@@ -1581,14 +1615,14 @@ new function() { // Scope for intersection using bezier fat-line clipping
         // Stop iteration if all points and control points are collinear.
         if (d1 === 0 && d2 === 0
                 && dp0 === 0 && dp1 === 0 && dp2 === 0 && dp3 === 0
-            // Clip the convex-hull with dMin and dMax, taking into account that
-            // there will be no intersections if one of the tvalues are null.
+            // Clip convex-hull with dMin and dMax, taking into account that
+            // there will be no intersections if one of the results is null.
             || (tMinClip = clipConvexHull(top, bottom, dMin, dMax)) == null
             || (tMaxClip = clipConvexHull(top.reverse(), bottom.reverse(),
                 dMin, dMax)) == null)
-            return;
-        // tMin and tMax are within the range (0, 1). We need to project it
-        // to the original parameter range for v2.
+            return calls;
+        // tMin and tMax are within the range (0, 1). Project it back to the
+        // original parameter range for v2.
         var tMinNew = tMin + (tMax - tMin) * tMinClip,
             tMaxNew = tMin + (tMax - tMin) * tMaxClip;
         if (Math.max(uMax - uMin, tMaxNew - tMinNew)
@@ -1596,13 +1630,13 @@ new function() { // Scope for intersection using bezier fat-line clipping
             // We have isolated the intersection with sufficient precision
             var t = (tMinNew + tMaxNew) / 2,
                 u = (uMin + uMax) / 2;
-            // As we've been clipping v1 and v2, we need to pass on the original
-            // curves here again to match the parameter space of t1 and t2.
+            // As v1 and v2 were clipped, reset them again to the original
+            // curve values to match the parameter space of t1 and t2:
             v1 = c1.getValues();
             v2 = c2.getValues();
             addLocation(locations, param,
-                reverse ? v2 : v1, reverse ? c2 : c1, reverse ? u : t, null,
-                reverse ? v1 : v2, reverse ? c1 : c2, reverse ? t : u, null);
+                    flip ? v2 : v1, flip ? c2 : c1, flip ? u : t, null,
+                    flip ? v1 : v2, flip ? c1 : c2, flip ? t : u, null);
         } else {
             // Apply the result of the clipping to curve 1:
             v1 = Curve.getPart(v1, tMinClip, tMaxClip);
@@ -1613,23 +1647,24 @@ new function() { // Scope for intersection using bezier fat-line clipping
                         t = (tMinNew + tMaxNew) / 2;
                     calls = addCurveIntersections(
                             v2, parts[0], c2, c1, locations, param,
-                            uMin, uMax, tMinNew, t, !reverse, calls);
+                            uMin, uMax, tMinNew, t, !flip, recursion, calls);
                     calls = addCurveIntersections(
                             v2, parts[1], c2, c1, locations, param,
-                            uMin, uMax, t, tMaxNew, !reverse, calls);
+                            uMin, uMax, t, tMaxNew, !flip, recursion, calls);
                 } else {
                     var parts = Curve.subdivide(v2, 0.5),
                         u = (uMin + uMax) / 2;
                     calls = addCurveIntersections(
                             parts[0], v1, c2, c1, locations, param,
-                            uMin, u, tMinNew, tMaxNew, !reverse, calls);
+                            uMin, u, tMinNew, tMaxNew, !flip, recursion, calls);
                     calls = addCurveIntersections(
                             parts[1], v1, c2, c1, locations, param,
-                            u, uMax, tMinNew, tMaxNew, !reverse, calls);
+                            u, uMax, tMinNew, tMaxNew, !flip, recursion, calls);
                 }
             } else { // Iterate
-                calls = addCurveIntersections(v2, v1, c2, c1, locations, param,
-                        uMin, uMax, tMinNew, tMaxNew, !reverse, calls);
+                calls = addCurveIntersections(
+                        v2, v1, c2, c1, locations, param,
+                        uMin, uMax, tMinNew, tMaxNew, !flip, recursion, calls);
             }
         }
         return calls;
@@ -1850,8 +1885,8 @@ new function() { // Scope for intersection using bezier fat-line clipping
                         v1, v2, c1, c2, locations, param,
                         // Define the defaults for these parameters of
                         // addCurveIntersections():
-                        // tMin, tMax, uMin, uMax, reverse, recursion
-                        0, 1, 0, 1, 0, 0);
+                        // tMin, tMax, uMin, uMax, flip, recursion, calls
+                        0, 1, 0, 1, 0, 0, 0);
             // We're done if we handle lines and found one intersection already:
             // #805#issuecomment-148503018
             if (straight && locations.length > before)

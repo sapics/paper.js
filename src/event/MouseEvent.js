@@ -51,12 +51,6 @@ var MouseEvent = Event.extend(/** @lends MouseEvent# */{
      * @type Point
      */
 
-    // DOCS: document MouseEvent#target
-    /**
-     * @name MouseEvent#target
-     * @type Item
-     */
-
     // DOCS: document MouseEvent#delta
     /**
      * @name MouseEvent#delta

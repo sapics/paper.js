@@ -443,35 +443,44 @@ var CurveLocation = Base.extend(/** @lends CurveLocation# */{
 
         function isInRange(angle, min, max) {
             return min < max
-                ? angle > min && angle < max
-                // The range wraps around -180 / 180 degrees:
-                : angle > min && angle <= 180 || angle >= -180 && angle < max;
+                    ? angle > min && angle < max
+                    // min > max: the range wraps around -180 / 180 degrees
+                    : angle > min || angle < max;
         }
 
-        // Calculate angles for all four tangents at the intersection point,
-        // using values for getTangentAt() that are almost 0 and 1.
-        // NOTE: Even though getTangentAt() has code to support 0 and 1 instead
-        // of tMin and tMax, we still need to use tMin / tMaxx instead, as other
-        // issues emerge from switching to 0 and 1 in edge cases.
-        // NOTE: VectorBoolean has code that slowly shifts these points inwards
+        // Calculate unambiguous angles for all 4 tangents at the intersection:
+        // - If the intersection is inside a curve (t1 / t2Inside), the tangent
+        //   at t1 / t2 is unambiguous, because the curve is continuous.
+        // - If the intersection is on a segment, step away at equal offsets on
+        //   each curve, to calculate unambiguous angles. The vector from the
+        //   intersection to this new location is used to determine the angle.
+        //   The offset is determined by taking 1/64th of the length of the
+        //   shortest of all involved curves.
+        // NOTE: VectorBoolean has code that slowly shifts these offsets inwards
         // until the resulting tangents are not ambiguous. Do we need this too?
-        // NOTE: We handle t*Inside here simply by picking t1 / t2 instead of
-        // tMin / tMax. E.g. if t1Inside is true, c1 will be the same as c2,
-        // and the code will doe the right thing.
-        // The incomings tangents v1 & v3 are inverted, so that all angles
-        // are pointing outwards in the right direction from the intersection.
-        var v2 = c2.getTangentAtTime(t1Inside ? t1 : tMin),
-            v1 = (t1Inside ? v2 : c1.getTangentAtTime(tMax)).negate(),
-            v4 = c4.getTangentAtTime(t2Inside ? t2 : tMin),
-            v3 = (t2Inside ? v4 : c3.getTangentAtTime(tMax)).negate(),
+        var lenghts = [];
+        if (!t1Inside)
+            lenghts.push(c1.getLength(), c2.getLength());
+        if (!t2Inside)
+            lenghts.push(c3.getLength(), c4.getLength());
+        var pt = this.getPoint(),
+            offset = Math.min.apply(Math, lenghts) / 64,
+            v2 = t1Inside ? c2.getTangentAtTime(t1)
+                    : c2.getPointAt(offset).subtract(pt),
+            v1 = t1Inside ? v2.negate()
+                    : c1.getPointAt(-offset).subtract(pt),
+            v4 = t2Inside ? c4.getTangentAtTime(t2)
+                    : c4.getPointAt(offset).subtract(pt),
+            v3 = t2Inside ? v4.negate()
+                    : c3.getPointAt(-offset).subtract(pt),
             // NOTE: For shorter API calls we work with angles in degrees here:
             a1 = v1.getAngle(),
             a2 = v2.getAngle(),
             a3 = v3.getAngle(),
             a4 = v4.getAngle();
-        // Count how many times curve2 angles appear between the curve1 angles
+        // Count how many times curve2 angles appear between the curve1 angles.
         // If each pair of angles split the other two, then the edges cross.
-        // Use t*Inside to decide which angle pair to check against.
+        // Use t1Inside to decide which angle pair to check against.
         // If t1 is inside the curve, check against a3 & a4, othrwise a1 & a2.
         return !!(t1Inside
                 ? (isInRange(a1, a3, a4) ^ isInRange(a2, a3, a4)) &&

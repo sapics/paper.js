@@ -168,6 +168,10 @@ contribute to the code.
 - Add new options to `#exportSVG()` to control output bounds and transformation
   matrix (#972).
 - Allow `Item#position` to be selected via `Item#position.selected` (#980).
+- Add `tolerance` argument to `Path#join(path, tolerance)`.
+- Add `Curve#getOffsetAtTime(time)`, as the reverse of
+  `Curve#getTimeAt(offset)`.
+- Add `Raster#loaded` to reflect the loading state of its image.
 
 ### Fixed
 - Fix calculations of `Item#strokeBounds` for all possible combinations of
@@ -240,6 +244,10 @@ contribute to the code.
   (#769).
 - Fix wrong indices in `Item#insertChildren()`, when inserting children that
   were previously inserted in the same parent (#1015).
+- Add capability to `PathItem#closePath()` to handle imprecise SVG data due to
+  rounding (#1045).
+- Improve reliability of fat-line clipping for curves that are very similar
+  (#904).
 
 ### Removed
 - Canvas attributes "resize" and "data-paper-resize" no longer cause paper to

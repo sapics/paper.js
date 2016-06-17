@@ -299,7 +299,7 @@ PathItem.inject(new function() {
      * Private method that returns the winding contribution of the given point
      * with respect to a given set of monotonic curves.
      */
-    function getWinding(point, curves, operator, horizontal) {
+    function getWinding(point, curves, horizontal) {
         var epsilon = /*#=*/Numerical.WINDING_EPSILON,
             px = point.x,
             py = point.y,
@@ -333,9 +333,9 @@ PathItem.inject(new function() {
             yTop = (yTop + py) / 2;
             yBottom = (yBottom + py) / 2;
             if (yTop > -Infinity)
-                windLeft = getWinding(new Point(px, yTop), curves, operator);
+                windLeft = getWinding(new Point(px, yTop), curves).winding;
             if (yBottom < Infinity)
-                windRight = getWinding(new Point(px, yBottom), curves, operator);
+                windRight = getWinding(new Point(px, yBottom), curves).winding;
         } else {
             var xBefore = px - epsilon,
                 xAfter = px + epsilon,
@@ -422,12 +422,14 @@ PathItem.inject(new function() {
                 windRight = windRightOnCurve;
             }
         }
-        // We need to handle the winding contribution differently when dealing
-        // with unite operations, so that it will be 1 for any point on the
-        // outside path, since we are not considering a contribution of 2 a part
-        // of the result, but would have to for outside points. See #1054
-        return operator && operator.unite && !windLeft ^ !windRight ? 1
-                : Math.max(abs(windLeft), abs(windRight));
+        // Return both the calculated winding contribution, and also detect if
+        // we are on the contour of the area by comparing windLeft & windRight.
+        // This is required when handling unite operations, where a winding
+        // contribution of 2 is not part of the result unless it's the contour:
+        return {
+            winding: Math.max(abs(windLeft), abs(windRight)),
+            contour: !windLeft ^ !windRight
+        };
     }
 
     function propagateWinding(segment, path1, path2, monoCurves, operator) {
@@ -438,7 +440,7 @@ PathItem.inject(new function() {
         var chain = [],
             start = segment,
             totalLength = 0,
-            windingSum = 0;
+            winding;
         do {
             var curve = segment.getCurve(),
                 length = curve.getLength();
@@ -446,43 +448,39 @@ PathItem.inject(new function() {
             totalLength += length;
             segment = segment.getNext();
         } while (segment && !segment._intersection && segment !== start);
-        // Calculate the average winding among three evenly distributed points
-        // along this curve chain as a representative winding number.
-        for (var i = 0; i < 3; i++) {
-            // Sample the points at 3 equal intervals along the total length:
-            var length = totalLength * (i + 1) / 4;
-            for (var j = 0, l = chain.length; j < l; j++) {
-                var entry = chain[j],
-                    curveLength = entry.length;
-                if (length <= curveLength) {
-                    var curve = entry.curve,
-                        path = curve._path,
-                        parent = path._parent,
-                        t = curve.getTimeAt(length),
-                        pt = curve.getPointAtTime(t),
-                        hor = Math.abs(curve.getTangentAtTime(t).y)
-                                < /*#=*/Numerical.TRIGONOMETRIC_EPSILON;
-                    if (parent instanceof CompoundPath)
-                        path = parent;
-                    // While subtracting, we need to omit this curve if it is
-                    // contributing to the second operand and is outside the
-                    // first operand.
-                    if (!(operator.subtract && path2
-                            && (path === path1
-                                && path2._getWinding(pt, operator, hor)
-                            || path === path2
-                                && !path1._getWinding(pt, operator, hor)))) {
-                        windingSum += getWinding(pt, monoCurves, operator, hor);
-                    }
-                    break;
-                }
-                length -= curveLength;
+        // Sample the point at a middle of the chain to get its winding:
+        var length = totalLength / 2;
+        for (var j = 0, l = chain.length; j < l; j++) {
+            var entry = chain[j],
+                curveLength = entry.length;
+            if (length <= curveLength) {
+                var curve = entry.curve,
+                    path = curve._path,
+                    parent = path._parent,
+                    t = curve.getTimeAt(length),
+                    pt = curve.getPointAtTime(t),
+                    hor = Math.abs(curve.getTangentAtTime(t).y)
+                            < /*#=*/Numerical.TRIGONOMETRIC_EPSILON;
+                if (parent instanceof CompoundPath)
+                    path = parent;
+                // While subtracting, we need to omit this curve if it is
+                // contributing to the second operand and is outside the
+                // first operand.
+                winding = !(operator.subtract && path2 && (
+                        path === path1 &&  path2._getWinding(pt, hor) ||
+                        path === path2 && !path1._getWinding(pt, hor)))
+                            ? getWinding(pt, monoCurves, hor)
+                            : { winding: 0 };
+                 break;
             }
+            length -= curveLength;
         }
-        // Assign the average winding to the entire curve chain.
-        var winding = Math.round(windingSum / 3);
-        for (var j = chain.length - 1; j >= 0; j--)
-            chain[j].segment._winding = winding;
+        // Now assign the winding to the entire curve chain.
+        for (var j = chain.length - 1; j >= 0; j--) {
+            var seg = chain[j].segment;
+            seg._winding = winding.winding;
+            seg._contour = winding.contour;
+        }
     }
 
     /**
@@ -500,8 +498,15 @@ PathItem.inject(new function() {
             start,
             otherStart;
 
-        function isValid(seg) {
-            return !!(!seg._visited && (!operator || operator[seg._winding]));
+        function isValid(seg, excludeContour) {
+            // Unite operations need special handling of segments with a winding
+            // contribution of two (part of both involved areas) but which are
+            // also part of the contour of the result. Such segments are not
+            // chosen as the start of new paths and are not always counted as a
+            // valid next step, as controlled by the excludeContour parameter.
+            return !!(seg && !seg._visited && (!operator
+                    || operator[seg._winding]
+                    || !excludeContour && operator.unite && seg._contour));
         }
 
         function isStart(seg) {
@@ -511,39 +516,24 @@ PathItem.inject(new function() {
         // If there are multiple possible intersections, find the one that's
         // either connecting back to start or is not visited yet, and will be
         // part of the boolean result:
-        function findBestIntersection(inter, exclude, strict) {
+        function findBestIntersection(inter, exclude) {
             if (!inter._next)
                 return inter;
             while (inter) {
                 var seg = inter._segment,
                     nextSeg = seg.getNext(),
-                    nextInter = nextSeg._intersection;
+                    nextInter = nextSeg && nextSeg._intersection;
                 // See if this segment and the next are both not visited yet, or
-                // are bringing us back to the beginning, and are both part of
-                // the boolean result.
-                // Handling overlaps correctly here is tricky, requiring two
-                // passes, first with strict = true, then false:
-                // In strict mode, the current and the next segment are both
-                // checked for validity, and only the current one is allowed to
-                // be an overlap.
-                // If this pass does not yield a result, the non-strict mode is
-                // used, in which invalid current segments are tolerated, and
-                // overlaps for the next segment are allowed.
+                // are bringing us back to the beginning, and are both valid,
+                // meaning they are part of the boolean result.
                 if (seg !== exclude && (isStart(seg) || isStart(nextSeg)
                     || !seg._visited && !nextSeg._visited
                     // Self-intersections (!operator) don't need isValid() calls
-                    && (!operator
-                        || (!strict || isValid(seg))
-                        // Do not consider nextSeg in strict mode if it is part
-                        // of an overlap, in order to give non-overlapping
-                        // options that might follow the priority over overlaps.
-                        && (!(strict && nextInter && nextInter._overlap)
-                            && isValid(nextSeg)
-                            // If the next segment isn't valid, its intersection
-                            // to which we may switch might be, so check that.
-                            || !strict && nextInter
-                            && isValid(nextInter._segment))
-                    )))
+                    && (!operator || isValid(seg) && (isValid(nextSeg)
+                        // If the next segment isn't valid, its intersection
+                        // to which we may switch might be, so check that.
+                        || nextInter && isValid(nextInter._segment)))
+                    ))
                     return inter;
                 // If it's no match, continue with the next linked intersection.
                 inter = inter._next;
@@ -578,19 +568,21 @@ PathItem.inject(new function() {
                     }
                 }
             }
-            // Do not start paths with invalid segments (segments that were
-            // already visited, or that are not going to be part of the result).
-            // Also don't start in overlaps, unless all segments are part of
-            // overlaps, in which case we have no other choice.
-            if (!isValid(seg) || !seg._path._validOverlapsOnly
-                    && inter && seg._winding && inter._overlap)
+            // Exclude three cases of invalid starting segments:
+            // - Do not start with invalid segments (segments that were already
+            //   visited, or that are not going to be part of the result).
+            // - Do not start in segments that have an invalid winding
+            //   contribution but are part of the contour (excludeContour=true).
+            // - Do not start in overlaps, unless all segments are part of
+            //   overlaps, in which case we have no other choice.
+            if (!isValid(seg, true)
+                    || !seg._path._validOverlapsOnly && inter && inter._overlap)
                 continue;
             start = otherStart = null;
             while (true) {
                 // For each segment we encounter, see if there are multiple
                 // intersections, and if so, pick the best one:
-                inter = inter && (findBestIntersection(inter, seg, true)
-                        || findBestIntersection(inter, seg, false)) || inter;
+                inter = inter && findBestIntersection(inter, seg) || inter;
                 // Get the reference to the other segment on the intersection.
                 var other = inter && inter._segment;
                 if (isStart(seg)) {
@@ -600,12 +592,15 @@ PathItem.inject(new function() {
                         finished = true;
                         // Switch the segment, but do not update handleIn
                         seg = other;
-                    } else if (isValid(other)) {
+                    } else if (isValid(other, isValid(seg, true))) {
+                        // Note that we pass `true` for excludeContour here if
+                        // the current segment is valid and not a contour
+                        // segment. See isValid()/getWinding() for explanations.
                         // We are at a crossing and the other segment is part of
                         // the boolean result, switch over.
-                        // We need to mark overlap segments as visited when
-                        // processing intersection and subtraction.
-                        if (operator && inter._overlap
+                        // We need to mark segments as visited when processing
+                        // intersection and subtraction.
+                        if (operator
                                 && (operator.intersect || operator.subtract)) {
                             seg._visited = true;
                         }
@@ -621,7 +616,8 @@ PathItem.inject(new function() {
                 }
                 // If there are only valid overlaps and we encounter and invalid
                 // segment, bail out immediately. Otherwise we need to be more
-                // tolerant due to complex situations of crossing.
+                // tolerant due to complex situations of crossing,
+                // see findBestIntersection()
                 if (seg._path._validOverlapsOnly && !isValid(seg))
                     break;
                 if (!path) {
@@ -650,14 +646,20 @@ PathItem.inject(new function() {
                 path.firstSegment.setHandleIn(handleIn);
                 path.setClosed(true);
             } else if (path) {
-                var length = path.getLength();
-                // Only complain about open paths if they are long enough.
-                if (length >= /*#=*/Numerical.GEOMETRIC_EPSILON) {
+                // Only complain about open paths if they would actually contain
+                // an area when closed. Open paths that can silently discarded
+                // can occur due to epsilons, e.g. when two segments are so
+                // close to each other that they are considered the same
+                // location, but the winding calculation still produces a valid
+                // number due to their slight differences producing a tiny area.
+                var area = path.getArea(true);
+                if (Math.abs(area) >= /*#=*/Numerical.GEOMETRIC_EPSILON) {
                     // This path wasn't finished and is hence invalid.
                     // Report the error to the console for the time being.
                     console.error('Boolean operation resulted in open path',
                             'segments =', path._segments.length,
-                            'length =', length);
+                            'length =', path.getLength(),
+                            'area=', area);
                 }
                 path = null;
             }
@@ -685,9 +687,8 @@ PathItem.inject(new function() {
          * part of a horizontal curve
          * @return {Number} the winding number
          */
-        _getWinding: function(point, operator, horizontal) {
-            return getWinding(point, this._getMonoCurves(), operator,
-                    horizontal);
+        _getWinding: function(point, horizontal) {
+            return getWinding(point, this._getMonoCurves(), horizontal).winding;
         },
 
         /**
@@ -978,7 +979,7 @@ Path.inject(/** @lends Path# */{
                     // Keep then range to 0 .. 1 (excluding) in the search for y
                     // extrema.
                     n = Numerical.solveQuadratic(a, b, c, roots, tMin, tMax);
-                if (n === 0) {
+                if (n < 1) {
                     insertCurve(v);
                 } else {
                     roots.sort();

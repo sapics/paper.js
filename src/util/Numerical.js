@@ -234,10 +234,8 @@ var Numerical = new function() {
                     // We multiply with a factor to normalize the coefficients.
                     // The factor is just the nearest exponent of 10, big enough
                     // to raise all the coefficients to nearly [-1, +1] range.
-                    var mult = pow(10,
-                            abs(Math.floor(Math.log(gmC) * Math.LOG10E)));
-                    if (!isFinite(mult))
-                        mult = 0;
+                    var mult = gmC === 0 ? 0 : pow(10,
+                        abs(Math.floor(Math.log(gmC) * Math.LOG10E)));
                     a *= mult;
                     b *= mult;
                     c *= mult;
@@ -358,7 +356,8 @@ var Numerical = new function() {
             }
             // The cubic has been deflated to a quadratic.
             var count = Numerical.solveQuadratic(a, b1, c2, roots, min, max);
-            if (isFinite(x) && (count === 0 || x !== roots[count - 1])
+            if (isFinite(x) && count >= 0
+                    && (count === 0 || x !== roots[count - 1])
                     && (min == null || x > min - EPSILON && x < max + EPSILON))
                 roots[count++] = min == null ? x : clamp(x, min, max);
             return count;

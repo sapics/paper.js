@@ -1066,12 +1066,7 @@ new function() { // Injection scope for various item event handlers
     setRotation: function(rotation) {
         var current = this.getRotation();
         if (current != null && rotation != null) {
-            // Preserve the cached _decomposed values over rotation, and only
-            // update the rotation property on it.
-            var decomposed = this._decomposed;
             this.rotate(rotation - current);
-            decomposed.rotation = rotation;
-            this._decomposed = decomposed;
         }
     },
 
@@ -1090,15 +1085,11 @@ new function() { // Injection scope for various item event handlers
     },
 
     setScaling: function(/* scaling */) {
-        var current = this.getScaling();
-        if (current) {
+        var current = this.getScaling(),
             // Clone existing points since we're caching internally.
-            var scaling = Point.read(arguments, 0, { clone: true }),
-                // See #setRotation() for preservation of _decomposed.
-                decomposed = this._decomposed;
+            scaling = Point.read(arguments, 0, { clone: true, readNull: true });
+        if (current && scaling) {
             this.scale(scaling.x / current.x, scaling.y / current.y);
-            decomposed.scaling = scaling;
-            this._decomposed = decomposed;
         }
     },
 
@@ -2342,7 +2333,7 @@ new function() { // Injection scope for hit-test functions shared with project
             // Use the loop also to filter out wrong _type.
             for (var i = items.length - 1; i >= 0; i--) {
                 var item = items[i];
-                if (_proto && !(item instanceof _proto)) {
+                if (!item || _proto && !(item instanceof _proto)) {
                     items.splice(i, 1);
                 } else {
                     // Notify parent of change. Don't notify item itself yet,
@@ -4095,7 +4086,7 @@ new function() { // Injection scope for hit-test functions shared with project
                 // Transform the blur value as a vector and use its new length:
                 blur = mx.transform(new Point(style.getShadowBlur(), 0)),
                 offset = mx.transform(this.getShadowOffset());
-            ctx.shadowColor =  style.getShadowColor().toCanvasStyle(ctx);
+            ctx.shadowColor = style.getShadowColor().toCanvasStyle(ctx);
             ctx.shadowBlur = blur.getLength();
             ctx.shadowOffsetX = offset.x;
             ctx.shadowOffsetY = offset.y;
