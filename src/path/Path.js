@@ -51,8 +51,8 @@ var Path = PathItem.extend(/** @lends Path# */{
      * top of the active layer.
      *
      * @name Path#initialize
-     * @param {Object} object an object literal containing properties to
-     * be set on the path
+     * @param {Object} object an object containing properties to be set on the
+     *     path
      * @return {Path} the newly created path
      *
      * @example {@paperscript}
@@ -134,18 +134,12 @@ var Path = PathItem.extend(/** @lends Path# */{
     copyContent: function(source) {
         this.setSegments(source._segments);
         this._closed = source._closed;
-        var clockwise = source._clockwise;
-        if (clockwise !== undefined)
-            this._clockwise = clockwise;
     },
 
     _changed: function _changed(flags) {
         _changed.base.call(this, flags);
         if (flags & /*#=*/ChangeFlag.GEOMETRY) {
-            // Clockwise state becomes undefined as soon as geometry changes.
-            // Also clear cached mono curves used for winding calculations.
-            this._length = this._area = this._clockwise = this._monoCurves =
-                    undefined;
+            this._length = this._area = undefined;
             if (flags & /*#=*/ChangeFlag.SEGMENTS) {
                 this._version++; // See CurveLocation
             } else if (this._curves) {
@@ -178,13 +172,23 @@ var Path = PathItem.extend(/** @lends Path# */{
     },
 
     setSegments: function(segments) {
-        var fullySelected = this.isFullySelected();
+        var fullySelected = this.isFullySelected(),
+            length = segments && segments.length;
         this._segments.length = 0;
         this._segmentSelection = 0;
         // Calculate new curves next time we call getCurves()
         this._curves = undefined;
-        if (segments && segments.length > 0)
-            this._add(Segment.readAll(segments));
+        if (length) {
+            // See if the last segment is a boolean describing the path's closed
+            // state. This is part of the shorter segment array notation that
+            // can also be nested to create compound-paths out of one array.
+            var last = segments[length - 1];
+            if (typeof last === 'boolean') {
+                this.setClosed(last);
+                length--;
+            }
+            this._add(Segment.readList(segments, 0, {}, length));
+        }
         // Preserve fullySelected state.
         // TODO: Do we still need this?
         if (fullySelected)
@@ -291,8 +295,8 @@ var Path = PathItem.extend(/** @lends Path# */{
         }
     }
 }, /** @lends Path# */{
-    // Enforce bean creation for getPathData() and getArea(), as they have
-    // hidden parameters.
+    // Enforce creation of beans, as bean getters have hidden parameters.
+    // See #getPathData() below.
     beans: true,
 
     getPathData: function(_matrix, _precision) {
@@ -318,18 +322,22 @@ var Path = PathItem.extend(/** @lends Path# */{
             } else {
                 inX = coords[2];
                 inY = coords[3];
-                // TODO: Add support for H/V and/or relative commands, where
-                // appropriate and resulting in shorter strings.
                 if (inX === curX && inY === curY
                         && outX === prevX && outY === prevY) {
                     // l = relative lineto:
-                    if (!skipLine)
-                        parts.push('l' + f.pair(curX - prevX, curY - prevY));
+                    if (!skipLine) {
+                        var dx = curX - prevX,
+                            dy = curY - prevY;
+                        parts.push(
+                              dx === 0 ? 'v' + f.number(dy)
+                            : dy === 0 ? 'h' + f.number(dx)
+                            : 'l' + f.pair(dx, dy));
+                    }
                 } else {
                     // c = relative curveto:
                     parts.push('c' + f.pair(outX - prevX, outY - prevY)
-                            + ' ' + f.pair(inX - prevX, inY - prevY)
-                            + ' ' + f.pair(curX - prevX, curY - prevY));
+                             + ' ' + f.pair( inX - prevX,  inY - prevY)
+                             + ' ' + f.pair(curX - prevX, curY - prevY));
                 }
             }
             prevX = curX;
@@ -338,7 +346,7 @@ var Path = PathItem.extend(/** @lends Path# */{
             outY = coords[5];
         }
 
-        if (length === 0)
+        if (!length)
             return '';
 
         for (var i = 0; i < length; i++)
@@ -356,7 +364,7 @@ var Path = PathItem.extend(/** @lends Path# */{
     // taken into account.
 
     isEmpty: function() {
-        return this._segments.length === 0;
+        return !this._segments.length;
     },
 
     _transformContent: function(matrix) {
@@ -449,7 +457,7 @@ var Path = PathItem.extend(/** @lends Path# */{
         }
         // If it's the first segment, correct the last segment of closed
         // paths too:
-        if (curve = curves[this._closed && start === 0 ? segments.length - 1
+        if (curve = curves[this._closed && !start ? segments.length - 1
                 : start - 1]) {
             curve._segment2 = segments[start] || segments[0];
             curve._changed();
@@ -541,7 +549,7 @@ var Path = PathItem.extend(/** @lends Path# */{
     add: function(segment1 /*, segment2, ... */) {
         return arguments.length > 1 && typeof segment1 !== 'number'
             // addSegments
-            ? this._add(Segment.readAll(arguments))
+            ? this._add(Segment.readList(arguments))
             // addSegment
             : this._add([ Segment.read(arguments) ])[0];
     },
@@ -585,7 +593,7 @@ var Path = PathItem.extend(/** @lends Path# */{
     insert: function(index, segment1 /*, segment2, ... */) {
         return arguments.length > 2 && typeof segment1 !== 'number'
             // insertSegments
-            ? this._add(Segment.readAll(arguments, 1), index)
+            ? this._add(Segment.readList(arguments, 1), index)
             // insertSegment
             : this._add([ Segment.read(arguments, 1) ], index)[0];
     },
@@ -641,7 +649,7 @@ var Path = PathItem.extend(/** @lends Path# */{
      * path2.position.x += 30;
      */
     addSegments: function(segments) {
-        return this._add(Segment.readAll(segments));
+        return this._add(Segment.readList(segments));
     },
 
     /**
@@ -655,7 +663,7 @@ var Path = PathItem.extend(/** @lends Path# */{
      * belongs to another path
      */
     insertSegments: function(index, segments) {
-        return this._add(Segment.readAll(segments), index);
+        return this._add(Segment.readList(segments), index);
     },
 
     /**
@@ -820,48 +828,23 @@ var Path = PathItem.extend(/** @lends Path# */{
      * @bean
      * @type Number
      */
-    getArea: function(_closed) {
-        // If the call overrides the 'closed' state, do not cache the result.
-        // This is used in tracePaths().
-        var cached = _closed === undefined,
-            area = this._area;
-        if (!cached || area == null) {
+    getArea: function() {
+        var area = this._area;
+        if (area == null) {
             var segments = this._segments,
-                count = segments.length,
-                closed = cached ? this._closed : _closed,
-                last = count - 1;
+                closed = this._closed;
             area = 0;
-            for (var i = 0, l = closed ? count : last; i < l; i++) {
+            for (var i = 0, l = segments.length; i < l; i++) {
+                var last = i + 1 === l;
                 area += Curve.getArea(Curve.getValues(
-                        segments[i], segments[i < last ? i + 1 : 0]));
+                        segments[i], segments[last ? 0 : i + 1],
+                        // If this is the last curve and the last is not closed,
+                        // connect with a straight curve and ignore the handles.
+                        null, last && !closed));
             }
-            if (cached)
-                this._area = area;
+            this._area = area;
         }
         return area;
-    },
-
-    /**
-     * Specifies whether the path is oriented clock-wise.
-     *
-     * @bean
-     * @type Boolean
-     */
-    isClockwise: function() {
-        if (this._clockwise !== undefined)
-            return this._clockwise;
-        return this.getArea() >= 0;
-    },
-
-    setClockwise: function(clockwise) {
-        // Only revers the path if its clockwise orientation is not the same
-        // as what it is now demanded to be.
-        // On-the-fly conversion to boolean:
-        if (this.isClockwise() != (clockwise = !!clockwise))
-            this.reverse();
-        // Reverse only flips _clockwise state if it was already set, so let's
-        // always set this here now.
-        this._clockwise = clockwise;
     },
 
     /**
@@ -1073,9 +1056,7 @@ var Path = PathItem.extend(/** @lends Path# */{
                 path = this;
             } else {
                 path = new Path(Item.NO_INSERT);
-                // Pass true for _preserve, in case of CompoundPath, to avoid
-                // reversing of path direction, which would mess with segments!
-                path.insertAbove(this, true);
+                path.insertAbove(this);
                 path.copyAttributes(this);
             }
             path._add(segs, 0);
@@ -1088,7 +1069,7 @@ var Path = PathItem.extend(/** @lends Path# */{
     },
 
     /**
-     * @deprecated, use use {@link #splitAt(offset)} instead.
+     * @deprecated use use {@link #splitAt(offset)} instead.
      */
     split: function(index, time) {
         var curve,
@@ -1253,25 +1234,22 @@ var Path = PathItem.extend(/** @lends Path# */{
         }
         // Clear curves since it all has changed.
         this._curves = null;
-        // Flip clockwise state if it's defined
-        if (this._clockwise !== undefined)
-            this._clockwise = !this._clockwise;
         this._changed(/*#=*/Change.GEOMETRY);
     },
 
     // NOTE: Documentation is in PathItem#flatten()
     flatten: function(flatness) {
-        // Use PathIterator to subdivide the curves into parts that are flat
+        // Use PathFlattener to subdivide the curves into parts that are flat
         // enough, as specified by `flatness` / Curve.isFlatEnough():
-        var iterator = new PathIterator(this, flatness || 0.25, 256, true),
-            parts = iterator.parts,
+        var flattener = new PathFlattener(this, flatness || 0.25, 256, true),
+            parts = flattener.parts,
             length = parts.length,
             segments = [];
         for (var i = 0; i < length; i++) {
             segments.push(new Segment(parts[i].curve.slice(0, 2)));
         }
         if (!this._closed && length > 0) {
-            // We need to explicitly add the end point of the last curve on open paths.
+            // Explicitly add the end point of the last curve on open paths.
             segments.push(new Segment(parts[length - 1].curve.slice(6)));
         }
         this.setSegments(segments);
@@ -1287,6 +1265,13 @@ var Path = PathItem.extend(/** @lends Path# */{
 
     // NOTE: Documentation is in PathItem#smooth()
     smooth: function(options) {
+        var that = this,
+            opts = options || {},
+            type = opts.type || 'asymmetric',
+            segments = this._segments,
+            length = segments.length,
+            closed = this._closed;
+
         // Helper method to pick the right from / to indices.
         // Supports numbers and segment objects.
         // For numbers, the `to` index is exclusive, while for segments and
@@ -1315,15 +1300,10 @@ var Path = PathItem.extend(/** @lends Path# */{
                     : index < 0 ? index + length : index, length - 1);
         }
 
-        var that = this,
-            opts = options || {},
-            type = opts.type || 'asymmetric',
-            segments = this._segments,
-            length = segments.length,
-            closed = this._closed,
-            loop = closed && opts.from === undefined && opts.to === undefined,
+        var loop = closed && opts.from === undefined && opts.to === undefined,
             from = getIndex(opts.from, 0),
             to = getIndex(opts.to, length - 1);
+
         if (from > to) {
             if (closed) {
                 from -= length;
@@ -1567,6 +1547,90 @@ var Path = PathItem.extend(/** @lends Path# */{
     },
 
     toPath: '#clone',
+
+    // NOTE: Documentation is in PathItem#compare()
+    compare: function compare(path) {
+        // If a compound-path is involved, redirect to PathItem#compare()
+        if (!path || path instanceof CompoundPath)
+            return compare.base.call(this, path);
+        var curves1 = this.getCurves(),
+            curves2 = path.getCurves(),
+            length1 = curves1.length,
+            length2 = curves2.length;
+        if (!length1 || !length2) {
+            // If one path defines curves and the other doesn't, we can't have
+            // matching geometries.
+            return length1 ^ length2;
+        }
+        var v1 = curves1[0].getValues(),
+            values2 = [],
+            pos1 = 0, pos2,
+            end1 = 0, end2;
+        // First, loop through curves2, looking for the start of the overlapping
+        // sequence with curves1[0]. Also cache curve values for later reuse.
+        for (var i = 0; i < length2; i++) {
+            var v2 = curves2[i].getValues();
+            values2.push(v2);
+            var overlaps = Curve.getOverlaps(v1, v2);
+            if (overlaps) {
+                // If the overlap doesn't start at the beginning of v2, then it
+                // can only be a partial overlap with curves2[0], and the start
+                // will be at curves2[length2 - 1]:
+                pos2 = !i && overlaps[0][0] > 0 ? length2 - 1 : i;
+                // Set end2 to the start of the first overlap on curves2, so
+                // connection checks further down can work.
+                end2 = overlaps[0][1];
+                break;
+            }
+        }
+        // Now loop through both curve arrays, find their overlaps, verify that
+        // they keep joining, and see if we end back at the start on both paths.
+        var abs = Math.abs,
+            epsilon = /*#=*/Numerical.CURVETIME_EPSILON,
+            v2 = values2[pos2],
+            start2;
+        while (v1 && v2) {
+            var overlaps = Curve.getOverlaps(v1, v2);
+            if (overlaps) {
+                // Check that the overlaps are joining on curves1.
+                var t1 = overlaps[0][0];
+                if (abs(t1 - end1) < epsilon) {
+                    end1 = overlaps[1][0];
+                    if (end1 === 1) {
+                        // Skip to the next curve if we're at the end of the
+                        // current, and set v1 to null if at the end of curves1.
+                        v1 = ++pos1 < length1 ? curves1[pos1].getValues() : null;
+                        end1 = 0;
+                    }
+                    // Check that the overlaps are joining on curves2.
+                    var t2 = overlaps[0][1];
+                    if (abs(t2 - end2) < epsilon) {
+                        if (!start2)
+                            start2 = [pos2, t2];
+                        end2 = overlaps[1][1];
+                        if (end2 === 1) {
+                            // Wrap pos2 around the end on values2:
+                            if (++pos2 >= length2)
+                                pos2 = 0;
+                            // Reuse cached values from initial search.
+                            v2 = values2[pos2] || curves2[pos2].getValues();
+                            end2 = 0;
+                        }
+                        if (!v1) {
+                            // We're done with curves1. If we're not back at the
+                            // start on curve2, the two paths are not identical.
+                            return start2[0] === pos2 && start2[1] === end2;
+                        }
+                        // All good, continue to avoid the break; further down.
+                        continue;
+                    }
+                }
+            }
+            // No overlap match found, break out early.
+            break;
+        }
+        return false;
+    },
 
     _hitTestSelf: function(point, options, viewMatrix, strokeMatrix) {
         var that = this,
@@ -2050,7 +2114,9 @@ new function() { // Scope for drawing
     // performance.
 
     function drawHandles(ctx, segments, matrix, size) {
-        var half = size / 2;
+        var half = size / 2,
+            coords = new Array(6),
+            pX, pY;
 
         function drawHandle(index) {
             var hX = coords[index],
@@ -2066,13 +2132,12 @@ new function() { // Scope for drawing
             }
         }
 
-        var coords = new Array(6);
         for (var i = 0, l = segments.length; i < l; i++) {
-            var segment = segments[i];
+            var segment = segments[i],
+                selection = segment._selection;
             segment._transformCoordinates(matrix, coords);
-            var selection = segment._selection,
-                pX = coords[0],
-                pY = coords[1];
+            pX = coords[0];
+            pY = coords[1];
             if (selection & /*#=*/SegmentSelection.HANDLE_IN)
                 drawHandle(2);
             if (selection & /*#=*/SegmentSelection.HANDLE_OUT)
@@ -2195,12 +2260,12 @@ new function() { // Scope for drawing
                 if (hasStroke) {
                     if (dashLength) {
                         // We cannot use the path created by drawSegments above
-                        // Use PathIterator to draw dashed paths:
+                        // Use PathFlattener to draw dashed paths:
                         if (!dontStart)
                             ctx.beginPath();
-                        var iterator = new PathIterator(this, 0.25, 32, false,
+                        var flattener = new PathFlattener(this, 0.25, 32, false,
                                 strokeMatrix),
-                            length = iterator.length,
+                            length = flattener.length,
                             from = -style.getDashOffset(), to,
                             i = 0;
                         from = from % length;
@@ -2212,7 +2277,7 @@ new function() { // Scope for drawing
                         while (from < length) {
                             to = from + getOffset(i++);
                             if (from > 0 || to > 0)
-                                iterator.drawPart(ctx,
+                                flattener.drawPart(ctx,
                                         Math.max(from, 0), Math.max(to, 0));
                             from = to + getOffset(i++);
                         }
@@ -2238,7 +2303,7 @@ new function() { // PostScript-style drawing commands
      */
     function getCurrentSegment(that) {
         var segments = that._segments;
-        if (segments.length === 0)
+        if (!segments.length)
             throw new Error('Use a moveTo() command first');
         return segments[segments.length - 1];
     }
@@ -2457,7 +2522,7 @@ new function() { // PostScript-style drawing commands
                         pt = center.add(vector);
                     }
                 }
-                if (i === 0) {
+                if (!i) {
                     // Modify startSegment
                     current.setHandleOut(out);
                 } else {
@@ -2702,22 +2767,19 @@ statics: {
 
     _addBevelJoin: function(segment, join, radius, miterLimit, matrix,
             strokeMatrix, addPoint, isArea) {
-        // Handles both 'bevel' and 'miter' joins, as they share a lot of code.
+        // Handles both 'bevel' and 'miter' joins, as they share a lot of code,
+        // using different matrices to transform segment points and stroke
+        // vectors to support Style#strokeScaling.
         var curve2 = segment.getCurve(),
             curve1 = curve2.getPrevious(),
-            point = curve2.getPointAtTime(0),
-            normal1 = curve1.getNormalAtTime(1),
-            normal2 = curve2.getNormalAtTime(0),
-            step = normal1.getDirectedAngle(normal2) < 0 ? -radius : radius;
-        normal1.setLength(step);
-        normal2.setLength(step);
-        // use different matrices to transform segment points and stroke vectors
-        // to support Style#strokeScaling.
-        if (matrix)
-            matrix._transformPoint(point, point);
-        if (strokeMatrix) {
-            strokeMatrix._transformPoint(normal1, normal1);
-            strokeMatrix._transformPoint(normal2, normal2);
+            point = curve2.getPoint1().transform(matrix),
+            normal1 = curve1.getNormalAtTime(1).multiply(radius)
+                .transform(strokeMatrix),
+            normal2 = curve2.getNormalAtTime(0).multiply(radius)
+                .transform(strokeMatrix);
+        if (normal1.getDirectedAngle(normal2) < 0) {
+            normal1 = normal1.negate();
+            normal2 = normal2.negate();
         }
         if (isArea) {
             addPoint(point);
@@ -2747,16 +2809,13 @@ statics: {
     _addSquareCap: function(segment, cap, radius, matrix, strokeMatrix,
             addPoint, isArea) {
         // Handles both 'square' and 'butt' caps, as they share a lot of code.
-        // Calculate the corner points of butt and square caps
-        var point = segment._point,
+        // Calculate the corner points of butt and square caps, using different
+        // matrices to transform segment points and stroke vectors to support
+        // Style#strokeScaling.
+        var point = segment._point.transform(matrix),
             loc = segment.getLocation(),
-            normal = loc.getNormal().multiply(radius); // normal is normalized
-        // use different matrices to transform segment points and stroke vectors
-        // to support Style#strokeScaling.
-        if (matrix)
-            matrix._transformPoint(point, point);
-        if (strokeMatrix)
-            strokeMatrix._transformPoint(normal, normal);
+            // NOTE: normal is normalized, so multiply instead of normalize.
+            normal = loc.getNormal().multiply(radius).transform(strokeMatrix);
         if (isArea) {
             addPoint(point.subtract(normal));
             addPoint(point.add(normal));
@@ -2805,7 +2864,7 @@ statics: {
             segment._transformCoordinates(matrix, coords);
             for (var j = 0; j < 6; j += 2) {
                 // Use different padding for points or handles
-                var padding = j === 0 ? joinPadding : strokePadding,
+                var padding = !j ? joinPadding : strokePadding,
                     paddingX = padding ? padding[0] : 0,
                     paddingY = padding ? padding[1] : 0,
                     x = coords[j],

@@ -71,7 +71,7 @@ var Curve = Base.extend(/** @lends Curve# */{
             this._path = arg0;
             seg1 = arg1;
             seg2 = arg2;
-        } else if (count === 0) {
+        } else if (!count) {
             seg1 = new Segment();
             seg2 = new Segment();
         } else if (count === 1) {
@@ -166,7 +166,7 @@ var Curve = Base.extend(/** @lends Curve# */{
                 handleOut = segment2._handleOut;
             removed = segment2.remove();
             if (removed)
-                this._segment1._handleOut.set(handleOut.x, handleOut.y);
+                this._segment1._handleOut.set(handleOut);
         }
         return removed;
     },
@@ -182,8 +182,7 @@ var Curve = Base.extend(/** @lends Curve# */{
     },
 
     setPoint1: function(/* point */) {
-        var point = Point.read(arguments);
-        this._segment1._point.set(point.x, point.y);
+        this._segment1._point.set(Point.read(arguments));
     },
 
     /**
@@ -197,8 +196,7 @@ var Curve = Base.extend(/** @lends Curve# */{
     },
 
     setPoint2: function(/* point */) {
-        var point = Point.read(arguments);
-        this._segment2._point.set(point.x, point.y);
+        this._segment2._point.set(Point.read(arguments));
     },
 
     /**
@@ -212,8 +210,7 @@ var Curve = Base.extend(/** @lends Curve# */{
     },
 
     setHandle1: function(/* point */) {
-        var point = Point.read(arguments);
-        this._segment1._handleOut.set(point.x, point.y);
+        this._segment1._handleOut.set(Point.read(arguments));
     },
 
     /**
@@ -227,8 +224,7 @@ var Curve = Base.extend(/** @lends Curve# */{
     },
 
     setHandle2: function(/* point */) {
-        var point = Point.read(arguments);
-        this._segment2._handleIn.set(point.x, point.y);
+        this._segment2._handleIn.set(Point.read(arguments));
     },
 
     /**
@@ -303,7 +299,7 @@ var Curve = Base.extend(/** @lends Curve# */{
      * @return {Boolean} {@true if this is the first curve}
      */
     isFirst: function() {
-        return this._segment1._index === 0;
+        return !this._segment1._index;
     },
 
     /**
@@ -487,8 +483,8 @@ var Curve = Base.extend(/** @lends Curve# */{
                 // Adjust the handles on the existing segments. The new segment
                 // will be inserted between the existing segment1 and segment2:
                 // Convert absolute -> relative
-                segment1._handleOut.set(left[2] - left[0], left[3] - left[1]);
-                segment2._handleIn.set(right[4] - right[6],right[5] - right[7]);
+                segment1._handleOut._set(left[2] - left[0], left[3] - left[1]);
+                segment2._handleIn._set(right[4] - right[6],right[5] - right[7]);
             }
             // Create the new segment:
             var x = left[6], y = left[7],
@@ -543,7 +539,7 @@ var Curve = Base.extend(/** @lends Curve# */{
 
     // TODO: Remove in 1.0.0? (deprecated January 2016):
     /**
-     * @deprecated, use use {@link #divideAt(offset)} or
+     * @deprecated use use {@link #divideAt(offset)} or
      * {@link #divideAtTime(time)} instead.
      */
     divide: function(offset, isTime) {
@@ -553,7 +549,7 @@ var Curve = Base.extend(/** @lends Curve# */{
 
     // TODO: Remove in 1.0.0? (deprecated January 2016):
     /**
-     * @deprecated, use use {@link #splitAt(offset)} or
+     * @deprecated use use {@link #splitAt(offset)} or
      * {@link #splitAtTime(time)} instead.
      */
     split: function(offset, isTime) {
@@ -576,22 +572,26 @@ var Curve = Base.extend(/** @lends Curve# */{
      * turning the curve into a straight line.
      */
     clearHandles: function() {
-        this._segment1._handleOut.set(0, 0);
-        this._segment2._handleIn.set(0, 0);
+        this._segment1._handleOut._set(0, 0);
+        this._segment2._handleIn._set(0, 0);
     },
 
 statics: /** @lends Curve */{
-    getValues: function(segment1, segment2, matrix) {
+    getValues: function(segment1, segment2, matrix, straight) {
         var p1 = segment1._point,
             h1 = segment1._handleOut,
             h2 = segment2._handleIn,
             p2 = segment2._point,
-            values = [
-                p1._x, p1._y,
-                p1._x + h1._x, p1._y + h1._y,
-                p2._x + h2._x, p2._y + h2._y,
-                p2._x, p2._y
-            ];
+            x1 = p1.x, y1 = p1.y,
+            x2 = p2.x, y2 = p2.y,
+            values = straight
+                ? [ x1, y1, x1, y1, x2, y2, x2, y2 ]
+                : [
+                    x1, y1,
+                    x1 + h1._x, y1 + h1._y,
+                    x2 + h2._x, y2 + h2._y,
+                    x2, y2
+                ];
         if (matrix)
             matrix._transformCoordinates(values, values, 4);
         return values;
@@ -620,6 +620,57 @@ statics: /** @lends Curve */{
             [p1x, p1y, p3x, p3y, p6x, p6y, p8x, p8y], // left
             [p8x, p8y, p7x, p7y, p5x, p5y, p2x, p2y] // right
         ];
+    },
+
+    /**
+     * Splits the specified curve values into curves that are monotone in the
+     * specified coordinate direction.
+     *
+     * @param {Number[]} v the curve values, as returned by
+     *     {@link Curve#getValues()}
+     * @param {Number} [dir=0] the direction in which the curves should be
+     *     monotone, `0`: monotone in x-direction, `1`: monotone in y-direction
+     * @return {Number[][]} an array of curve value arrays of the resulting
+     *     monotone curve. If the original curve was already monotone, an array
+     *     only containing its values are returned.
+     */
+    getMonoCurves: function(v, dir) {
+        var curves = [],
+            // Determine the ordinate index in the curve values array.
+            io = dir ? 0 : 1,
+            o0 = v[io],
+            o1 = v[io + 2],
+            o2 = v[io + 4],
+            o3 = v[io + 6];
+        if ((o0 >= o1) === (o1 >= o2) && (o1 >= o2) === (o2 >= o3)
+                || Curve.isStraight(v)) {
+            // Straight curves and curves with all involved points ordered
+            // in coordinate direction are guaranteed to be monotone.
+            curves.push(v);
+        } else {
+            var a = 3 * (o1 - o2) - o0 + o3,
+                b = 2 * (o0 + o2) - 4 * o1,
+                c = o1 - o0,
+                tMin = 4e-7,
+                tMax = 1 - tMin,
+                roots = [],
+                n = Numerical.solveQuadratic(a, b, c, roots, tMin, tMax);
+            if (!n) {
+                curves.push(v);
+            } else {
+                roots.sort();
+                var t = roots[0],
+                    parts = Curve.subdivide(v, t);
+                curves.push(parts[0]);
+                if (n > 1) {
+                    t = (roots[1] - t) / (1 - t);
+                    parts = Curve.subdivide(parts[1], t);
+                    curves.push(parts[0]);
+                }
+                curves.push(parts[1]);
+            }
+        }
+        return curves;
     },
 
     // Converts from the point coordinates (p1, c1, c2, p2) for one axis to
@@ -1068,7 +1119,7 @@ statics: /** @lends Curve */{
 
     // TODO: Remove in 1.0.0? (deprecated January 2016):
     /**
-     * @deprecated, use use {@link #getTimeOf(point)} instead.
+     * @deprecated use use {@link #getTimeOf(point)} instead.
      */
     getParameterAt: '#getTimeAt',
 
@@ -1121,7 +1172,7 @@ statics: /** @lends Curve */{
 
     // TODO: Remove in 1.0.0? (deprecated January 2016):
     /**
-     * @deprecated, use use {@link #getTimeOf(point)} instead.
+     * @deprecated use use {@link #getTimeOf(point)} instead.
      */
     getParameterOf: '#getTimeOf',
 
@@ -1662,9 +1713,17 @@ new function() { // Scope for intersection using bezier fat-line clipping
                             u, uMax, tMinNew, tMaxNew, !flip, recursion, calls);
                 }
             } else { // Iterate
-                calls = addCurveIntersections(
+                if (uMax - uMin >= /*#=*/Numerical.CLIPPING_EPSILON) {
+                    calls = addCurveIntersections(
                         v2, v1, c2, c1, locations, param,
                         uMin, uMax, tMinNew, tMaxNew, !flip, recursion, calls);
+                } else {
+                    // The interval on the other curve is already tight enough,
+                    // therefore we keep iterating on the same curve.
+                    calls = addCurveIntersections(
+                        v1, v2, c1, c2, locations, param,
+                        tMinNew, tMaxNew, uMin, uMax, flip, recursion, calls);
+                }
             }
         }
         return calls;
@@ -2055,13 +2114,13 @@ new function() { // Scope for intersection using bezier fat-line clipping
                 if (t2 != null) {  // If point is on curve
                     var pair = i === 0 ? [t1, t2] : [t2, t1];
                     // Filter out tiny overlaps.
-                    if (pairs.length === 0 ||
+                    if (!pairs.length ||
                         abs(pair[0] - pairs[0][0]) > timeEpsilon &&
                         abs(pair[1] - pairs[0][1]) > timeEpsilon)
                         pairs.push(pair);
                 }
                 // We checked 3 points but found no match, curves can't overlap.
-                if (i === 1 && pairs.length === 0)
+                if (i === 1 && !pairs.length)
                     break;
             }
             if (pairs.length !== 2) {

@@ -22,6 +22,9 @@
 var PathItem = Item.extend(/** @lends PathItem# */{
     _class: 'PathItem',
     _canScaleStroke: true,
+    // Enforce creation of beans, as bean getters have hidden parameters.
+    // See  #isClockwise() below.
+    beans: true,
 
     initialize: function PathItem() {
         // Do nothing.
@@ -33,15 +36,54 @@ var PathItem = Item.extend(/** @lends PathItem# */{
          * data describes a plain path or a compound-path with multiple
          * sub-paths.
          *
+         * @name PathItem.create
          * @param {String} pathData the SVG path-data to parse
          * @return {Path|CompoundPath} the newly created path item
          */
-        create: function(pathData) {
-            // If there are multiple moveTo commands or a closePath command
-            // followed by other commands, we have a CompoundPath.
-            var ctor = (pathData && pathData.match(/m/gi) || []).length > 1
-                    || /z\s*\S+/i.test(pathData) ? CompoundPath : Path;
-            return new ctor(pathData);
+
+        /**
+         * Creates a path item from the given segments array, determining if the
+         * array describes a plain path or a compound-path with multiple
+         * sub-paths.
+         *
+         * @name PathItem.create
+         * @param {Number[][]} segments the segments array to parse
+         * @return {Path|CompoundPath} the newly created path item
+         */
+
+        /**
+         * Creates a path item from the given object, determining if the
+         * contained information describes a plain path or a compound-path with
+         * multiple sub-paths.
+         *
+         * @name PathItem.create
+         * @param {Object} object an object containing the properties describing
+         *     the item to be created
+         * @return {Path|CompoundPath} the newly created path item
+         */
+        create: function(arg) {
+            var data,
+                segments,
+                compound;
+            if (Base.isPlainObject(arg)) {
+                segments = arg.segments;
+                data = arg.pathData;
+            } else if (Array.isArray(arg)) {
+                segments = arg;
+            } else if (typeof arg === 'string') {
+                data = arg;
+            }
+            if (segments) {
+                var first = segments[0];
+                compound = first && Array.isArray(first[0]);
+            } else if (data) {
+                // If there are multiple moveTo commands or a closePath command
+                // followed by other commands, we have a CompoundPath.
+                compound = (data.match(/m/gi) || []).length > 1
+                        || /z\s*\S+/i.test(data);
+            }
+            var ctor = compound ? CompoundPath : Path;
+            return new ctor(arg);
         }
     },
 
@@ -51,13 +93,35 @@ var PathItem = Item.extend(/** @lends PathItem# */{
     },
 
     /**
+     * Specifies whether the path as a whole is oriented clock-wise, by looking
+     * at the path's area.
+     * Note that self-intersecting paths and sub-paths of different orientation
+     * can result in areas that cancel each other out.
+     *
+     * @bean
+     * @type Boolean
+     * @see Path#getArea()
+     * @see CompoundPath#getArea()
+     */
+    isClockwise: function() {
+        return this.getArea() >= 0;
+    },
+
+    setClockwise: function(clockwise) {
+        // Only revers the path if its clockwise orientation is not the same
+        // as what it is now demanded to be.
+        // On-the-fly conversion to boolean:
+        if (this.isClockwise() != (clockwise = !!clockwise))
+            this.reverse();
+    },
+
+    /**
      * The path's geometry, formatted as SVG style path data.
      *
      * @name PathItem#getPathData
      * @bean
      * @type String
      */
-
     setPathData: function(data) {
         // NOTE: #getPathData() is defined in CompoundPath / Path
         // This is a very compact SVG Path Data parser that works both for Path
@@ -98,14 +162,16 @@ var PathItem = Item.extend(/** @lends PathItem# */{
             coords = part.match(/[+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?/g);
             var length = coords && coords.length;
             relative = command === lower;
+            // Fix issues with z in the middle of SVG path data, not followed by
+            // a m command, see #413:
             if (previous === 'z' && !/[mz]/.test(lower))
-                this.moveTo(current = start);
+                this.moveTo(current);
             switch (lower) {
             case 'm':
             case 'l':
                 var move = lower === 'm';
                 for (var j = 0; j < length; j += 2)
-                    this[j === 0 && move ? 'moveTo' : 'lineTo'](
+                    this[!j && move ? 'moveTo' : 'lineTo'](
                             current = getPoint(j));
                 control = current;
                 if (move)
@@ -114,6 +180,7 @@ var PathItem = Item.extend(/** @lends PathItem# */{
             case 'h':
             case 'v':
                 var coord = lower === 'h' ? 'x' : 'y';
+                current = current.clone(); // Clone as we're going to modify it.
                 for (var j = 0; j < length; j++) {
                     current[coord] = getCoord(j, coord);
                     this.lineTo(current);
@@ -169,6 +236,8 @@ var PathItem = Item.extend(/** @lends PathItem# */{
                 // Merge first and last segment with Numerical.EPSILON tolerance
                 // to address imprecisions in relative SVG data.
                 this.closePath(/*#=*/Numerical.EPSILON);
+                // Correctly handle relative m commands, see #1101:
+                current = start;
                 break;
             }
             previous = lower;
@@ -183,7 +252,7 @@ var PathItem = Item.extend(/** @lends PathItem# */{
 
     _contains: function(point) {
         // NOTE: point is reverse transformed by _matrix, so we don't need to
-        // apply here.
+        // apply the matrix here.
 /*#*/ if (__options.nativeContains || !__options.booleanOperations) {
         // To compare with native canvas approach:
         var ctx = CanvasProvider.getContext(1, 1);
@@ -198,8 +267,11 @@ var PathItem = Item.extend(/** @lends PathItem# */{
         // for a quick check before calculating the actual winding.
         var winding = point.isInside(
                 this.getBounds({ internal: true, handle: true }))
-                    && this._getWinding(point);
-        return !!(this.getFillRule() === 'evenodd' ? winding & 1 : winding);
+                    ? this._getWinding(point)
+                    : {};
+        return !!(this.getFillRule() === 'evenodd'
+                ? winding.windingL & 1 || winding.windingR & 1
+                : winding.winding);
 /*#*/ } // !__options.nativeContains && __options.booleanOperations
     },
 
@@ -682,6 +754,48 @@ var PathItem = Item.extend(/** @lends PathItem# */{
             this.setClosed(from._closed);
             this._changed(/*#=*/Change.GEOMETRY);
         }
+    },
+
+    /**
+     * Compares the geometry of two paths to see if they describe the same
+     * shape, detecting cases where paths start in different segments or even
+     * use different amounts of curves to describe the same shape, as long as
+     * their orientation is the same, and their segments and handles really
+     * result in the same visual appearance of curves.
+     *
+     * @name PathItem#compare
+     * @function
+     *
+     * @param {PathItem} path the path to compare this path's geometry with
+     * @return {Boolean} {@true if two paths describe the shame shape}
+     */
+    compare: function(path) {
+        var ok = false;
+        if (path) {
+            var paths1 = this._children || [this],
+                paths2 = path._children.slice() || [path],
+                length1 = paths1.length,
+                length2 = paths2.length,
+                matched = [],
+                count;
+            ok = true;
+            for (var i1 = length1 - 1; i1 >= 0 && ok; i1--) {
+                var path1 = paths1[i1];
+                ok = false;
+                for (var i2 = length2 - 1; i2 >= 0 && !ok; i2--) {
+                    if (path1.compare(paths2[i2])) {
+                        if (!matched[i2]) {
+                            matched[i2] = true;
+                            count++;
+                        }
+                        ok = true;
+                    }
+                }
+            }
+            // Each path in path2 needs to be matched at least once.
+            ok = ok && count === length2;
+        }
+        return ok;
     },
 
     /**

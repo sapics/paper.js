@@ -77,7 +77,7 @@ var paper = function(self, undefined) {
 /*#*/ if (__options.booleanOperations) {
 /*#*/     include('path/PathItem.Boolean.js');
 /*#*/ }
-/*#*/ include('path/PathIterator.js');
+/*#*/ include('path/PathFlattener.js');
 /*#*/ include('path/PathFitter.js');
 
 /*#*/ include('text/TextItem.js');
@@ -123,4 +123,4 @@ var paper = function(self, undefined) {
 
 /*#*/ include('export.js');
 return paper;
-}(typeof self === 'object' ? self : null);
+}.call(this, typeof self === 'object' ? self : null);
