@@ -948,7 +948,7 @@ new function() { // Injection scope for various item event handlers
             cacheItem = options.cacheItem,
             _matrix = internal ? null : this._matrix._orNullIfIdentity(),
             // Create a key for caching, reflecting all bounds options.
-            cacheKey = cacheItem && (!matrix || matrix.equals(_matrix))
+            cacheKey = cacheItem && (matrix ? matrix.equals(_matrix) : !_matrix)
                 && this._getBoundsCacheKey(options, internal),
             bounds = this._bounds;
         // NOTE: This needs to happen before returning cached values, since even
