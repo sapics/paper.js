@@ -789,3 +789,26 @@ test('group.internalBounds with child and child.applyMatrix = false (#1250)', fu
     equals(group.internalBounds, new Rectangle(0, 0, 250, 250),
             'group.internalBounds after scaling item1');
 });
+
+test('bound caching fix in identity matrix (#1457)', function(){
+    // The bug occurs only when applyMatrix: false.
+    let p1 = new Path.Rectangle({
+        pivot: new Point(100,0),
+        position: new Point(0,0),
+        size: new Size(200,100),
+        fillColor: 'green',
+        applyMatrix: false
+    });
+    let g1 = new Group({
+        children: [p1],
+        pivot: new Point(-100,0),
+        position: new Point(0, 0),
+        applyMatrix: false
+    });
+    let g2 = new Group({
+        children: [g1],
+        position: new Point(200,200),
+        applyMatrix: false
+    });
+    equals(group.bounds, new Rectangle(200, 150, 200, 100), 'group.bounds');
+});
