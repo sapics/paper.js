@@ -105,6 +105,12 @@ test('Import SVG polygon', function() {
     equals(imported, path);
 });
 
+test('Import SVG with use (#1329)', function() {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg"> <circle id="myCircle" cx="100" cy="100" r="40"/> <use href="#myCircle" x="100" fill="blue" /> <use href="#myCircle" x="200" fill="white" stroke="blue" /> </svg>';
+    var imported = paper.project.importSVG(svg);
+    equals(imported.children.length, 3);
+});
+
 test('Import SVG polyline', function() {
     var points = '5,5 45,45 5,45 45,5';
     var imported = paper.project.importSVG(createSVG('polyline', {

@@ -37,7 +37,7 @@ var SvgElement = new function() {
     function get(node, name) {
         var namespace = attributeNamespace[name],
             value = namespace
-                ? node.getAttributeNS(namespace, name)
+                ? node.getAttributeNS(namespace, name) || node.getAttribute(name)
                 : node.getAttribute(name);
         return value === 'null' ? null : value;
     }
