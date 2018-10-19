@@ -1076,8 +1076,10 @@ new function() { // Injection scope for various item event handlers
                     // Pass true for noInternal, since even when getting
                     // internal bounds for this item, we need to apply the
                     // matrices to its children.
-                    var bounds = item._getCachedBounds(
-                        matrix && matrix.appended(item._matrix), options, true),
+                    var itemMatrix = item._matrix,
+                        bounds = item._getCachedBounds(
+                            matrix ? matrix.appended(itemMatrix) : itemMatrix,
+                            options, true),
                         rect = bounds.rect;
                     x1 = Math.min(rect.x, x1);
                     y1 = Math.min(rect.y, y1);
@@ -2287,7 +2289,9 @@ new function() { // Injection scope for hit-test functions shared with project
             matrix = rect && (matrix || new Matrix());
             for (var i = 0, l = children && children.length; i < l; i++) {
                 var child = children[i],
-                    childMatrix = matrix && matrix.appended(child._matrix),
+                    _childMatrix = child._matrix,
+                    childMatrix = matrix ?
+                        matrix.appended(_childMatrix) : _childMatrix,
                     add = true;
                 if (rect) {
                     var bounds = child.getBounds(childMatrix);
