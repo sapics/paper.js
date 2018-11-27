@@ -113,7 +113,7 @@ var PathItem = Item.extend(/** @lends PathItem# */{
         // Only revers the path if its clockwise orientation is not the same
         // as what it is now demanded to be.
         // On-the-fly conversion to boolean:
-        if (this.isClockwise() != (clockwise = !!clockwise))
+        if (this.isClockwise() !== !!clockwise)
             this.reverse();
     },
 
@@ -417,7 +417,7 @@ var PathItem = Item.extend(/** @lends PathItem# */{
      */
     getNearestPoint: function(/* point */) {
         var loc = this.getNearestLocation.apply(this, arguments);
-        return loc ? loc.getPoint() : loc;
+        return loc && loc.getPoint();
     },
 
     /**
