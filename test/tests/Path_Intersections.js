@@ -343,3 +343,13 @@ test('#1284', function() {
     var path2 = createPath(curve2);
     testIntersections(path1.getIntersections(path2), expected);
 });
+
+test('#1638', function() {
+    var path1 = new Path.Circle([100,100],100);
+    var path2 = new Path.Circle([150,150],100);
+    var expected = [
+        { point: { x: 191.16238, y: 58.83762 }, time: 0.73431 },
+        { point: { x: 58.83762, y: 191.16238 }, time: 0.26569 },
+    ];
+    testIntersections(path1.getIntersections(path2), expected);
+});

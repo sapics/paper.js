@@ -1816,9 +1816,11 @@ new function() { // Scope for bezier intersection using fat-line clipping
             // We have isolated the intersection with sufficient precision
             var t = (tMinNew + tMaxNew) / 2,
                 u = (uMin + uMax) / 2;
-            addLocation(locations, include,
-                    flip ? c2 : c1, flip ? u : t,
-                    flip ? c1 : c2, flip ? t : u);
+            if (c1.getPointAtTime(t).isClose(c2.getPointAtTime(u), 1e-5)) {
+                addLocation(locations, include,
+                        flip ? c2 : c1, flip ? u : t,
+                        flip ? c1 : c2, flip ? t : u);
+            }
         } else {
             // Apply the result of the clipping to curve 1:
             v1 = Curve.getPart(v1, tMinClip, tMaxClip);
