@@ -80,7 +80,7 @@
     "qunitjs": "^1.23.0",
     "require-dir": "^1.2.0",
     "resemblejs": "^3.1.0",
-    "run-sequence": "^2.2.1",
+    "run-sequence-v3": "^2.3.0",
     "source-map-support": "^0.5.12",
     "stats.js": "0.17.0",
     "straps": "^3.0.1",
