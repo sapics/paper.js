@@ -34,7 +34,7 @@ install:
 before_script:
 - travis/setup-git.sh
 - npm set progress=false
-- which gulp || npm install -g gulp-cli
+- which gulp || npm install -g @sapics/gulp
 - npm install
 script:
 - gulp jshint
