@@ -10,7 +10,7 @@
  * All rights reserved.
  */
 
-var gulp = require('gulp'),
+var gulp = require('@sapics/gulp'),
     del = require('del'),
     merge = require('merge-stream'),
     zip = require('gulp-zip');

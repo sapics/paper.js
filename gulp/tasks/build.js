@@ -10,7 +10,7 @@
  * All rights reserved.
  */
 
-var gulp = require('gulp'),
+var gulp = require('@sapics/gulp'),
     prepro = require('gulp-prepro'),
     rename = require('gulp-rename'),
     uncomment = require('gulp-uncomment'),

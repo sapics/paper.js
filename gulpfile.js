@@ -10,7 +10,7 @@
  * All rights reserved.
  */
 
-var gulp = require('gulp'),
+var gulp = require('@sapics/gulp'),
     requireDir = require('require-dir');
 
 requireDir('./gulp/utils');
