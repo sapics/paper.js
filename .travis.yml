@@ -1,9 +1,7 @@
 language: node_js
 # Follow https://github.com/nodejs/LTS to decide when to remove a version
 node_js:
-# Stable version is temporarily disabled due to a bug in resemblejs package with
-# node v12 (https://github.com/orgs/paperjs/teams/contributors/discussions/12).
-# - stable
+- stable
 - 11
 - 10
 - 8
@@ -36,7 +34,7 @@ install:
 before_script:
 - travis/setup-git.sh
 - npm set progress=false
-- which gulp || npm install -g gulp-cli
+- which gulp || npm install -g gulp-v3
 - npm install
 script:
 - gulp jshint
