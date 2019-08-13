@@ -14,12 +14,15 @@
   "types": "dist/paper.d.ts",
   "scripts": {
     "build": "gulp build",
+    "minify": "gulp minify",
     "dist": "gulp dist",
     "zip": "gulp zip",
     "docs": "gulp docs",
     "load": "gulp load",
     "jshint": "gulp jshint",
-    "test": "gulp test"
+    "test": "gulp test",
+    "jshint_dev": "gulp jshint --ensure-branch develop",
+    "test_dev": "gulp test --ensure-branch develop"
   },
   "files": ["AUTHORS.md", "CHANGELOG.md", "dist/", "examples/", "LICENSE.txt", "README.md"],
   "engines": {
@@ -27,8 +30,6 @@
   },
   "husky": {
     "hooks": {
-      "pre-commit": "gulp jshint --ensure-branch develop",
-      "pre-push": "gulp test --ensure-branch develop"
     }
   },
   "browser": {
