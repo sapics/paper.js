@@ -2,8 +2,8 @@
  * Paper.js - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
  *
- * Copyright (c) 2011 - 2016, Juerg Lehni & Jonathan Puckey
- * http://scratchdisk.com/ & http://jonathanpuckey.com/
+ * Copyright (c) 2011 - 2019, Juerg Lehni & Jonathan Puckey
+ * http://scratchdisk.com/ & https://puckey.studio/
  *
  * Distributed under the MIT license. See LICENSE file for details.
  *
@@ -87,7 +87,7 @@ var PaperScope = Base.extend(/** @lends PaperScope# */{
             // here: { chrome: true, webkit: false }, Mozilla missing is the
             // only difference to jQuery.browser
             user.replace(
-                /(opera|chrome|safari|webkit|firefox|msie|trident|atom|node)\/?\s*([.\d]+)(?:.*version\/([.\d]+))?(?:.*rv\:v?([.\d]+))?/g,
+                /(opera|chrome|safari|webkit|firefox|msie|trident|atom|node|jsdom)\/?\s*([.\d]+)(?:.*version\/([.\d]+))?(?:.*rv\:v?([.\d]+))?/g,
                 function(match, n, v1, v2, rv) {
                     // Do not set additional browsers once chrome is detected.
                     if (!agent.chrome) {
@@ -95,7 +95,7 @@ var PaperScope = Base.extend(/** @lends PaperScope# */{
                                 /^(node|trident)$/.test(n) ? rv : v1;
                         agent.version = v;
                         agent.versionNumber = parseFloat(v);
-                        n = n === 'trident' ? 'msie' : n;
+                        n = { trident: 'msie', jsdom: 'node' }[n] || n;
                         agent.name = n;
                         agent[n] = true;
                     }
@@ -112,6 +112,7 @@ var PaperScope = Base.extend(/** @lends PaperScope# */{
      * The version of Paper.js, as a string.
      *
      * @type String
+     * @readonly
      */
     version: /*#=*/__options.version,
 
@@ -200,12 +201,14 @@ var PaperScope = Base.extend(/** @lends PaperScope# */{
      *     mapping, in case the code that's passed in has already been mingled.
      *
      * @param {String} code the PaperScript code
-     * @param {Object} [option] the compilation options
+     * @param {Object} [options] the compilation options
      */
     execute: function(code, options) {
-        var exports = paper.PaperScript.execute(code, this, options);
-        View.updateFocus();
-        return exports;
+/*#*/   if (__options.paperScript) {
+            var exports = paper.PaperScript.execute(code, this, options);
+            View.updateFocus();
+            return exports;
+/*#*/   }
     },
 
     /**
@@ -247,9 +250,10 @@ var PaperScope = Base.extend(/** @lends PaperScope# */{
      * Sets up an empty project for us. If a canvas is provided, it also creates
      * a {@link View} for it, both linked to this scope.
      *
-     * @param {HTMLCanvasElement|String} element the HTML canvas element this
-     * scope should be associated with, or an ID string by which to find the
-     * element.
+     * @param {HTMLCanvasElement|String|Size} element the HTML canvas element
+     * this scope should be associated with, or an ID string by which to find
+     * the element, or the size of the canvas to be created for usage in a web
+     * worker.
      */
     setup: function(element) {
         // Make sure this is the active scope, so the created project and view
@@ -307,6 +311,7 @@ var PaperScope = Base.extend(/** @lends PaperScope# */{
              * Retrieves a PaperScope object with the given scope id.
              *
              * @param id
+             * @return {PaperScope}
              */
             get: function(id) {
                 return this._scopes[id] || null;

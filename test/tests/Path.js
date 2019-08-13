@@ -2,8 +2,8 @@
  * Paper.js - The Swiss Army Knife of Vector Graphics Scripting.
  * http://paperjs.org/
  *
- * Copyright (c) 2011 - 2016, Juerg Lehni & Jonathan Puckey
- * http://scratchdisk.com/ & http://jonathanpuckey.com/
+ * Copyright (c) 2011 - 2019, Juerg Lehni & Jonathan Puckey
+ * http://scratchdisk.com/ & https://puckey.studio/
  *
  * Distributed under the MIT license. See LICENSE file for details.
  *
@@ -450,6 +450,13 @@ test('Path#flatten(maxDistance)', function() {
     }, true, 'The points of the last and before last segments should not be so close, that calling toString on them returns the same string value.');
 });
 
+test('Path#single segment closed path flatten (#1338)', function() {
+    var p = PathItem.create("m445.26701,223.69688c6.1738,8.7566 -7.05172,14.0468 0,0z");
+    p.strokeColor = "red";
+    p.flatten();
+    expect(0);
+});
+
 test('Path#curves after removing a segment - 1', function() {
     var path = new paper.Path([0, 0], [1, 1], [2, 2]);
     var prevCurves = path.curves.slice();
@@ -637,4 +644,12 @@ test('Path#arcTo(through, to) is on through point side (#1477)', function() {
     path.add(p1);
     path.arcTo(p2, p3);
     equals(true, path.segments[1].point.x > p1.x);
+});
+
+test('Path#arcTo(to, radius, rotation, clockwise, large) when from and to are equal (#1613)', function(){
+    var point = new Point(10,10);
+    var path = new Path();
+    path.moveTo(point);
+    path.arcTo(point, new Size(10), 0, true, true);
+    expect(0);
 });
