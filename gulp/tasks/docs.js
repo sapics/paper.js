@@ -10,7 +10,7 @@
  * All rights reserved.
  */
 
-var gulp = require('gulp'),
+var gulp = require('gulp-v3'),
     del = require('del'),
     rename = require('gulp-rename'),
     shell = require('gulp-shell'),
