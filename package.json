@@ -14,6 +14,7 @@
   "types": "dist/paper.d.ts",
   "scripts": {
     "build": "gulp build",
+    "minify": "gulp minify",
     "dist": "gulp dist",
     "zip": "gulp zip",
     "docs": "gulp docs",
@@ -27,8 +28,6 @@
   },
   "husky": {
     "hooks": {
-      "pre-commit": "gulp jshint --ensure-branch develop",
-      "pre-push": "gulp test --ensure-branch develop"
     }
   },
   "browser": {
@@ -43,6 +42,7 @@
     "acorn": "~0.5.0",
     "canvas": "^2.4.1",
     "del": "^4.1.0",
+    "gulp": "^3.9.1",
     "@sapics/gulp": "^3.11.0",
     "gulp-cached": "^1.1.0",
     "gulp-git-streamed": "^2.8.1",
